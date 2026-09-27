@@ -30,7 +30,14 @@ def format_html_report(report: dict, old_path: str, new_path: str, warnings: lis
         "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Course Comparison</title>",
         "<style>",
         "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; background: #f4f4f9; color: #333; }",
-        ".container { max-width: 1100px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }",
+        # 1800px comfortably covers a diff table at the default wrapcolumn=90
+        # (two ~712px nowrap content columns + line-number/next-arrow gutters
+        # come to ~1510px need, measured against a real report) with some
+        # headroom, without the page stretching edge-to-edge on very wide
+        # monitors. Raised from the original 1100px, which was narrower than
+        # a single diff table's two columns even at their normal width — not
+        # just an edge case, the routine case was already overflowing it.
+        ".container { max-width: 1800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }",
         "table.overview { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 15px; }",
         "table.overview th, table.overview td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }",
         "table.overview th { background-color: #f8f9fa; }",
@@ -39,7 +46,14 @@ def format_html_report(report: dict, old_path: str, new_path: str, warnings: lis
         ".b-removed { background: #f8d7da; color: #721c24; }",
         ".b-modified { background: #fff3cd; color: #856404; }",
         ".diff-section { margin-top: 40px; border-top: 2px solid #eee; padding-top: 20px; }",
-        "table.diff { width: 100%; border: 1px solid #ddd; font-family: Consolas, monospace; font-size: 13px; margin-bottom: 20px; }",
+        # Kept as a fallback for a pathological row only — a single unbroken
+        # token with no whitespace (a long URL, say) that wrapcolumn=90 can't
+        # break onto a continuation row, which no fixed container width can
+        # rule out entirely. Scoped to the table itself, not .diff-section or
+        # .container, so that rare case scrolls in place instead of dragging
+        # the whole page (headers, overview tables) sideways with it.
+        ".diff-scroll { overflow-x: auto; margin-bottom: 20px; }",
+        "table.diff { width: 100%; border: 1px solid #ddd; font-family: Consolas, monospace; font-size: 13px; }",
         "table.diff td { padding: 4px; }",
         "table.diff .diff_header { background: #f0f0f0; width: 1%; text-align: center; color: #999; }",
         "table.diff .diff_add { background: #cfc; }",
@@ -100,7 +114,11 @@ def format_html_report(report: dict, old_path: str, new_path: str, warnings: lis
                     c["old"].splitlines() or [""], c["new"].splitlines() or [""],
                     esc(old_label), esc(new_label), context=True,
                 )
-                out.append(diff_table)
+                # Wrapped so an overlong nowrap row scrolls horizontally
+                # within its own box instead of pushing the whole table
+                # past .container's white background — see the .diff-scroll
+                # comment in the stylesheet above for why it's scoped here.
+                out.append(f"<div class='diff-scroll'>{diff_table}</div>")
         out.append("</div>")
 
     out.append("</div></body></html>")
