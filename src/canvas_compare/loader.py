@@ -253,7 +253,12 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "") -
             print(f"  Warning: {msg}", file=sys.stderr)
 
         # ── Unlinked / attached files (docx, pptx, media, plain text, orphan pages) ─
-        for filename, file_info in all_files.items():
+        # Sorted by archive path so that when two files resolve to the same
+        # display name, which one gets the "(2)" suffix (see _add_item) is
+        # decided by the files themselves, not by the order this particular
+        # export happened to store them in. Otherwise the same two files could
+        # swap suffixes between two exports and diff as false changes.
+        for filename, file_info in sorted(all_files.items()):
             if file_info.is_dir() or filename in processed or filename == "imsmanifest.xml":
                 continue
 
