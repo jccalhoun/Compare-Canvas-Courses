@@ -32,10 +32,56 @@ def _blank_entry(item_type: str) -> dict:
     return {"type": item_type, "instructions": "", "fields": {}, "discussion_text": ""}
 
 
+def _with_suffix(key, n: int):
+    """Append " (n)" to the name part of a key (tuple keys) or the key itself."""
+    if isinstance(key, tuple):
+        return (key[0], f"{key[1]} ({n})")
+    return f"{key} ({n})"
+
+
+def _add_item(container: dict, key, value, warnings: list, what: str) -> None:
+    """
+    Insert into `container`, disambiguating on a key collision instead of
+    silently overwriting whatever was there.
+
+    text_items keys are (kind, name) tuples — kind is "item" (a titled
+    manifest entry), "quiz", or one of the file kinds "document"/
+    "presentation"/"page"/"file". Keeping kind out of the name string means
+    an instructor's own title like "[Document] Syllabus" can no longer land
+    on the same key as an unrelated attached file called "Syllabus": they
+    are ("item", "[Document] Syllabus") vs ("document", "Syllabus"). That
+    removes the cross-namespace collisions entirely, and — unlike a "(2)"
+    suffix — does so without the key depending on what else happens to be
+    in the same export (which would make one file get different keys in the
+    two courses being compared, and diff as a bogus remove + add).
+
+    What's left is a collision WITHIN one kind (e.g. a linked file item
+    titled "notes.txt" vs an orphan file literally named notes.txt). Those
+    still get a numeric suffix and a warning, since the alternative is one
+    of the two silently vanishing. media_items keeps plain string keys (it
+    is its own dict, so nothing else can collide with it).
+    """
+    original_key = key
+    suffix = 2
+    while key in container:
+        key = _with_suffix(original_key, suffix)
+        suffix += 1
+    if key != original_key:
+        shown = original_key[1] if isinstance(original_key, tuple) else original_key
+        new_shown = key[1] if isinstance(key, tuple) else key
+        msg = (f"Title collision on {what} {shown!r} — two different {what}s "
+               f"resolved to the same name. Stored the later one as {new_shown!r} "
+               f"instead of silently overwriting the first; check both in "
+               f"Canvas if this looks wrong.")
+        warnings.append(msg)
+        print(f"  Warning: {msg}", file=sys.stderr)
+    container[key] = value
+
+
 def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "") -> tuple[dict, dict, int, list]:
     """
     Open an imscc file and return:
-        text_items      : title -> content dict  (assignments, discussions,
+        text_items      : (kind, name) -> content dict  (assignments, discussions,
                                                    pages, docx, pptx, plain-
                                                    text files, and quizzes
                                                    when parse_quizzes=True)
@@ -186,8 +232,8 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "") -
                 or disc_path or info["type"] == "quiz"
             )
             if has_known_path:
-                key = f"[Quiz] {title}" if info["type"] == "quiz" else title
-                text_items[key] = entry
+                key = ("quiz", title) if info["type"] == "quiz" else ("item", title)
+                _add_item(text_items, key, entry, warnings, "item")
 
         if assignment_total and not assignment_with_fields:
             msg = (f"{label} has {assignment_total} assignment(s) but none produced "
@@ -220,7 +266,8 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "") -
             # central directory, so this costs nothing extra). Size alone
             # would call a same-size re-encode/replacement "unchanged".
             if name_lower.endswith(MEDIA_EXTENSIONS):
-                media_items[display_name] = (file_info.file_size, file_info.CRC)
+                _add_item(media_items, display_name, (file_info.file_size, file_info.CRC),
+                          warnings, "media file")
                 continue
 
             # Office / text / orphan HTML documents: extract and compare content
@@ -233,7 +280,7 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "") -
                         continue
                     entry = _blank_entry("docx")
                     entry["instructions"] = extract_docx_text(raw_bytes)
-                    text_items[f"[Document] {display_name}"] = entry
+                    _add_item(text_items, ("document", display_name), entry, warnings, "file")
 
                 elif name_lower.endswith(PPTX_EXTENSIONS):
                     if not HAVE_PPTX:
@@ -241,7 +288,7 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "") -
                         continue
                     entry = _blank_entry("pptx")
                     entry["instructions"] = extract_pptx_text(raw_bytes)
-                    text_items[f"[Presentation] {display_name}"] = entry
+                    _add_item(text_items, ("presentation", display_name), entry, warnings, "file")
 
                 elif name_lower.endswith((".html", ".htm")):
                     # A page/file not referenced anywhere in the manifest
@@ -259,12 +306,12 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "") -
                     entry = _blank_entry("page")
                     raw = raw_bytes.decode("utf-8-sig", errors="replace")
                     entry["instructions"] = clean_html(raw)
-                    text_items[f"[Page] {display_name}"] = entry
+                    _add_item(text_items, ("page", display_name), entry, warnings, "file")
 
                 elif name_lower.endswith(TEXT_EXTENSIONS):
                     entry = _blank_entry("text")
                     entry["instructions"] = raw_bytes.decode("utf-8-sig", errors="replace").strip()
-                    text_items[f"[File] {display_name}"] = entry
+                    _add_item(text_items, ("file", display_name), entry, warnings, "file")
 
             except Exception as e:
                 print(f"  Warning: could not read {filename}: {e}", file=sys.stderr)

@@ -26,21 +26,70 @@ def make_diff(old_text: str, new_text: str, old_label: str, new_label: str) -> s
     return "\n".join(diff)
 
 
+# Display prefix per kind. These reproduce the labels the report has always
+# shown ("[Quiz] Quiz 1", "[Document] handout.docx"), so output is unchanged
+# whenever nothing collides.
+_KIND_PREFIX = {
+    "item": "", "quiz": "[Quiz] ", "document": "[Document] ",
+    "presentation": "[Presentation] ", "page": "[Page] ", "file": "[File] ",
+}
+# Priority when two different keys would print identically: the first keeps
+# the plain label, later ones get a short marker so they can be told apart.
+_KIND_ORDER = ["item", "quiz", "document", "presentation", "page", "file"]
+_KIND_MARKER = {
+    "quiz": "quiz", "document": "attached file", "presentation": "attached file",
+    "page": "unlinked page", "file": "attached file",
+}
+
+
+def build_display_names(keys) -> dict:
+    """
+    Map each (kind, name) key to the string shown in the report.
+
+    Matching between the two courses is done on the tuple keys, so this only
+    affects presentation. It is computed once over the union of BOTH courses'
+    keys, so a given key gets the same label on the old and new side even if
+    only one course contains the item it would otherwise be confused with
+    (e.g. an instructor page titled "[Document] Syllabus" that exists in only
+    one export, next to an attached file "Syllabus" that exists in both).
+    """
+    groups = {}
+    for key in keys:
+        kind, name = key
+        groups.setdefault(_KIND_PREFIX[kind] + name, []).append(key)
+
+    names, used = {}, set()
+    for base, group in groups.items():
+        group.sort(key=lambda k: (_KIND_ORDER.index(k[0]), k[1]))
+        for i, key in enumerate(group):
+            label = base if i == 0 else f"{base} ({_KIND_MARKER.get(key[0], key[0])})"
+            n = 2
+            while label in used:  # last resort; needs a very unlucky title
+                label = f"{base} ({_KIND_MARKER.get(key[0], key[0])} {n})"
+                n += 1
+            used.add(label)
+            names[key] = label
+    return names
+
+
 def compare_courses(old_text, old_media, new_text, new_media,
                      old_label: str = "Old", new_label: str = "New") -> dict:
     old_keys = set(old_text)
     new_keys = set(new_text)
+    label    = build_display_names(old_keys | new_keys)
 
-    added   = sorted(new_keys - old_keys)
-    removed = sorted(old_keys - new_keys)
+    # Sorted by display label (not by tuple) so report order is unchanged.
+    added   = sorted((label[k] for k in new_keys - old_keys))
+    removed = sorted((label[k] for k in old_keys - new_keys))
     common  = old_keys & new_keys
 
     modified  = []
     unchanged = []
 
-    for title in sorted(common):
-        old = old_text[title]
-        new = new_text[title]
+    for key in sorted(common, key=lambda k: label[k]):
+        title = label[key]
+        old = old_text[key]
+        new = new_text[key]
         changes = []
 
         # Instructions / document body
