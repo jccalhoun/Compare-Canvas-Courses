@@ -2,12 +2,9 @@
 HTML/text normalization for comparison: strips markup down to plain text
 and resolves Canvas's inert export reference tokens into readable labels.
 
-Named parse_html (not html.py) purely so it reads as visually distinct
-from the stdlib html module that report_html.py imports — NOT to avoid a
-shadowing bug. Python 3 imports are absolute by default, so a sibling
-module named html.py could never shadow the real stdlib `html` for
-another file's `import html`; that was a Python 2 problem. This is a
-readability choice for humans scanning the directory, nothing more.
+Named parse_html rather than html.py for readability: absolute imports
+mean a sibling html.py couldn't shadow the stdlib `html` (used by
+report_html.py) anyway, but the two names would look confusingly alike.
 """
 
 from __future__ import annotations

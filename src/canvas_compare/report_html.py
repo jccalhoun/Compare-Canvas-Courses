@@ -20,8 +20,7 @@ def format_html_report(report: dict, old_path: str, new_path: str, warnings: lis
     opened later, not just in whatever terminal produced it.
     """
     d = difflib.HtmlDiff(wrapcolumn=90)
-    esc = html.escape  # local alias — the list below is named `out`, not
-                        # `html`, specifically so it can't shadow this module
+    esc = html.escape
 
     old_label = short_label(old_path)
     new_label = short_label(new_path)
@@ -90,7 +89,7 @@ def format_html_report(report: dict, old_path: str, new_path: str, warnings: lis
         out.append(f"<tr><td>{esc(t)}</td><td><span class='badge b-added'>Added</span></td><td></td></tr>")
     for t in m["removed"]:
         out.append(f"<tr><td>{esc(t)}</td><td><span class='badge b-removed'>Removed</span></td><td></td></tr>")
-    for t, (old_sz, old_crc), (new_sz, new_crc) in m["changed"]:
+    for t, (old_sz, _old_crc), (new_sz, _new_crc) in m["changed"]:
         if old_sz != new_sz:
             detail = f"{old_sz:,} bytes &rarr; {new_sz:,} bytes"
         else:

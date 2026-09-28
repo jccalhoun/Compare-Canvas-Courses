@@ -5,8 +5,8 @@ diff.compare_courses() consumes.
 The file-extension tuples below (MEDIA_EXTENSIONS etc.) live here rather
 than in a shared constants module: they're read nowhere outside this
 file's own unlinked-file loop, so a "constants.py" would just be
-indirection with a single consumer — see the naming note atop
-parse_html.py for the same reasoning applied to CANVAS_REFERENCE_TOKENS.
+indirection with a single consumer (CANVAS_REFERENCE_TOKENS is likewise
+kept next to its only user, in parse_html.py).
 """
 
 from __future__ import annotations

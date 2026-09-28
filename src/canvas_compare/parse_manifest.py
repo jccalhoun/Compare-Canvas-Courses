@@ -8,6 +8,10 @@ from urllib.parse import unquote
 from bs4 import BeautifulSoup
 
 
+class MissingManifestError(Exception):
+    """The archive has no imsmanifest.xml, so it isn't a Canvas course export."""
+
+
 def parse_manifest(z: zipfile.ZipFile) -> tuple[dict, dict]:
     """
     Parse imsmanifest.xml.
@@ -16,7 +20,10 @@ def parse_manifest(z: zipfile.ZipFile) -> tuple[dict, dict]:
         items       : title -> resource info dict (titled items from <item> tree)
         href_index  : filepath -> title (for unlinked files like docx/pptx/media)
     """
-    raw = z.read("imsmanifest.xml").decode("utf-8-sig", errors="replace")
+    try:
+        raw = z.read("imsmanifest.xml").decode("utf-8-sig", errors="replace")
+    except KeyError:
+        raise MissingManifestError("imsmanifest.xml not found in archive") from None
     soup = BeautifulSoup(raw, "xml")
 
     # --- Build resource id -> info map ---

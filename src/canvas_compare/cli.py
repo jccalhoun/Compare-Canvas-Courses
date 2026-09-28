@@ -50,6 +50,7 @@ import zipfile
 
 from .diff import compare_courses
 from .loader import load_course
+from .parse_manifest import MissingManifestError
 from .parse_office import missing_optional_deps
 from .report_html import format_html_report
 from .report_text import format_report
@@ -92,7 +93,7 @@ def main():
         except zipfile.BadZipFile:
             print(f"Error: {path} isn't a valid .imscc/zip file (or it's corrupted).", file=sys.stderr)
             sys.exit(1)
-        except KeyError:
+        except MissingManifestError:
             print(f"Error: {path} doesn't contain an imsmanifest.xml — "
                   f"is this a Canvas course export?", file=sys.stderr)
             sys.exit(1)

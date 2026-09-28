@@ -118,7 +118,7 @@ def format_report(report: dict, old_path: str, new_path: str, use_colors: bool =
     lines.append("")
 
     lines.append(f"  Changed — different size or content, possible replacement ({len(m['changed'])}):")
-    for t, (old_sz, old_crc), (new_sz, new_crc) in m["changed"]:
+    for t, (old_sz, _old_crc), (new_sz, _new_crc) in m["changed"]:
         lines.append(f"{C_MOD}    ▸ {t}{C_RST}")
         if old_sz != new_sz:
             delta = new_sz - old_sz
