@@ -191,9 +191,9 @@ dates). These are listed for completeness so you can confirm everything was foun
 **How items are named.** Most items appear under their Canvas title. Items that need
 to be told apart from those get a prefix: `[Quiz]`, `[Document]` (`.docx`),
 `[Presentation]` (`.pptx`), `[Page]` (an HTML page not linked from the course
-modules), and `[File]` (plain text). If two different items would end up with the
-same name, the later one gets a short marker such as `(attached file)`, and two items
-with an identical title get a `(2)` suffix.
+modules), and `[File]` (plain text). If two different kinds of item would end up with
+the same name, the later one gets a short marker such as `(attached file)`; two items
+of the same kind and name get a `(2)` suffix.
 
 ### Media section
 

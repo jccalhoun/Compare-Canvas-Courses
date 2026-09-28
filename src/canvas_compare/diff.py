@@ -59,13 +59,22 @@ def build_display_names(keys) -> dict:
         groups.setdefault(_KIND_PREFIX[kind] + name, []).append(key)
 
     names, used = {}, set()
-    for base, group in groups.items():
+    # Sorted so the result never depends on set iteration order (which varies
+    # between runs under string hash randomization). It only matters when one
+    # group's marker label equals another group's plain label.
+    for base in sorted(groups):
+        group = groups[base]
         group.sort(key=lambda k: (_KIND_ORDER.index(k[0]), k[1]))
         for i, key in enumerate(group):
-            label = base if i == 0 else f"{base} ({_KIND_MARKER.get(key[0], key[0])})"
+            # Only non-"item" kinds can be non-first (an item always sorts first
+            # and there is at most one per group), and every such kind has a marker.
+            label = base if i == 0 else f"{base} ({_KIND_MARKER[key[0]]})"
             n = 2
-            while label in used:  # last resort; needs a very unlucky title
-                label = f"{base} ({_KIND_MARKER.get(key[0], key[0])} {n})"
+            # Last resort, needs a very unlucky title. Unlike the line above, an
+            # "item" CAN reach this: another group's marker label may already
+            # have taken its plain label, hence the "item" default.
+            while label in used:
+                label = f"{base} ({_KIND_MARKER.get(key[0], 'item')} {n})"
                 n += 1
             used.add(label)
             names[key] = label
@@ -120,12 +129,12 @@ def compare_courses(old_text, old_media, new_text, new_media,
 
         # Structured metadata fields (points, submission type, etc.)
         all_keys = set(old["fields"]) | set(new["fields"])
-        for key in sorted(all_keys):
-            ov = old["fields"].get(key, "<not set>")
-            nv = new["fields"].get(key, "<not set>")
+        for field in sorted(all_keys):
+            ov = old["fields"].get(field, "<not set>")
+            nv = new["fields"].get(field, "<not set>")
             if ov != nv:
                 changes.append({
-                    "label": f"Field: {key}",
+                    "label": f"Field: {field}",
                     "kind":  "field",
                     "diff":  f"  {old_label} : {ov}\n  {new_label} : {nv}",
                     "old":   ov,

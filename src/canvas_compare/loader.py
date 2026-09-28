@@ -28,18 +28,18 @@ PPTX_EXTENSIONS  = ('.pptx',)
 TEXT_EXTENSIONS  = ('.txt', '.csv', '.md', '.markdown')
 
 
-def _blank_entry(item_type: str) -> dict:
-    return {"type": item_type, "instructions": "", "fields": {}, "discussion_text": ""}
+def _blank_entry() -> dict:
+    return {"instructions": "", "fields": {}, "discussion_text": ""}
 
 
 def _with_suffix(key, n: int):
-    """Append " (n)" to the name part of a key (tuple keys) or the key itself."""
+    """Append " (n)" to a key's name: the second element of a (kind, name) tuple, or a plain string key."""
     if isinstance(key, tuple):
         return (key[0], f"{key[1]} ({n})")
     return f"{key} ({n})"
 
 
-def _add_item(container: dict, key, value, warnings: list, what: str) -> None:
+def _add_item(container: dict, key, value, warnings: list) -> None:
     """
     Insert into `container`, disambiguating on a key collision instead of
     silently overwriting whatever was there.
@@ -67,10 +67,13 @@ def _add_item(container: dict, key, value, warnings: list, what: str) -> None:
         key = _with_suffix(original_key, suffix)
         suffix += 1
     if key != original_key:
+        # The kind ("quiz", "document", ...) is part of the tuple key, so the
+        # warning names the right thing; media_items uses plain string keys.
+        kind = original_key[0] if isinstance(original_key, tuple) else "media file"
         shown = original_key[1] if isinstance(original_key, tuple) else original_key
         new_shown = key[1] if isinstance(key, tuple) else key
-        msg = (f"Title collision on {what} {shown!r} — two different {what}s "
-               f"resolved to the same name. Stored the later one as {new_shown!r} "
+        msg = (f"Title collision on {kind} {shown!r} — another {kind} resolved "
+               f"to the same name. Stored the later one as {new_shown!r} "
                f"instead of silently overwriting the first; check both in "
                f"Canvas if this looks wrong.")
         warnings.append(msg)
@@ -129,7 +132,7 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "") -
 
         # ── Manifest-linked items (assignments, discussions, pages, quizzes) ─
         for title, info in manifest_items.items():
-            entry = _blank_entry(info["type"])
+            entry = _blank_entry()
 
             if info.get("html_path") and info["html_path"] in all_files:
                 raw = z.read(info["html_path"]).decode("utf-8-sig", errors="replace")
@@ -233,7 +236,7 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "") -
             )
             if has_known_path:
                 key = ("quiz", title) if info["type"] == "quiz" else ("item", title)
-                _add_item(text_items, key, entry, warnings, "item")
+                _add_item(text_items, key, entry, warnings)
 
         if assignment_total and not assignment_with_fields:
             msg = (f"{label} has {assignment_total} assignment(s) but none produced "
@@ -267,7 +270,7 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "") -
             # would call a same-size re-encode/replacement "unchanged".
             if name_lower.endswith(MEDIA_EXTENSIONS):
                 _add_item(media_items, display_name, (file_info.file_size, file_info.CRC),
-                          warnings, "media file")
+                          warnings)
                 continue
 
             # Office / text / orphan HTML documents: extract and compare content
@@ -278,17 +281,17 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "") -
                     if not HAVE_DOCX:
                         skipped_office += 1
                         continue
-                    entry = _blank_entry("docx")
+                    entry = _blank_entry()
                     entry["instructions"] = extract_docx_text(raw_bytes)
-                    _add_item(text_items, ("document", display_name), entry, warnings, "file")
+                    _add_item(text_items, ("document", display_name), entry, warnings)
 
                 elif name_lower.endswith(PPTX_EXTENSIONS):
                     if not HAVE_PPTX:
                         skipped_office += 1
                         continue
-                    entry = _blank_entry("pptx")
+                    entry = _blank_entry()
                     entry["instructions"] = extract_pptx_text(raw_bytes)
-                    _add_item(text_items, ("presentation", display_name), entry, warnings, "file")
+                    _add_item(text_items, ("presentation", display_name), entry, warnings)
 
                 elif name_lower.endswith((".html", ".htm")):
                     # A page/file not referenced anywhere in the manifest
@@ -303,15 +306,15 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "") -
                     # wrote changed.
                     if "non_cc_assessments" in filename:
                         continue
-                    entry = _blank_entry("page")
+                    entry = _blank_entry()
                     raw = raw_bytes.decode("utf-8-sig", errors="replace")
                     entry["instructions"] = clean_html(raw)
-                    _add_item(text_items, ("page", display_name), entry, warnings, "file")
+                    _add_item(text_items, ("page", display_name), entry, warnings)
 
                 elif name_lower.endswith(TEXT_EXTENSIONS):
-                    entry = _blank_entry("text")
+                    entry = _blank_entry()
                     entry["instructions"] = raw_bytes.decode("utf-8-sig", errors="replace").strip()
-                    _add_item(text_items, ("file", display_name), entry, warnings, "file")
+                    _add_item(text_items, ("file", display_name), entry, warnings)
 
             except Exception as e:
                 print(f"  Warning: could not read {filename}: {e}", file=sys.stderr)
