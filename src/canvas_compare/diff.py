@@ -42,6 +42,15 @@ _KIND_MARKER = {
 }
 
 
+def _marker(kind: str) -> str:
+    """
+    Short disambiguating label for a kind. Falls back to the kind's own name
+    so a kind added to _KIND_PREFIX/_KIND_ORDER without a marker still reads
+    sensibly in the report instead of crashing it mid-run.
+    """
+    return _KIND_MARKER.get(kind, kind)
+
+
 def build_display_names(keys) -> dict:
     """
     Map each (kind, name) key to the string shown in the report.
@@ -66,15 +75,13 @@ def build_display_names(keys) -> dict:
         group = groups[base]
         group.sort(key=lambda k: (_KIND_ORDER.index(k[0]), k[1]))
         for i, key in enumerate(group):
-            # Only non-"item" kinds can be non-first (an item always sorts first
-            # and there is at most one per group), and every such kind has a marker.
-            label = base if i == 0 else f"{base} ({_KIND_MARKER[key[0]]})"
+            label = base if i == 0 else f"{base} ({_marker(key[0])})"
             n = 2
-            # Last resort, needs a very unlucky title. Unlike the line above, an
-            # "item" CAN reach this: another group's marker label may already
-            # have taken its plain label, hence the "item" default.
+            # Last resort, needs a very unlucky title. An "item" can reach this
+            # (it is first in its group, but another group's marker label may
+            # already have taken its plain label); _marker("item") is "item".
             while label in used:
-                label = f"{base} ({_KIND_MARKER.get(key[0], 'item')} {n})"
+                label = f"{base} ({_marker(key[0])} {n})"
                 n += 1
             used.add(label)
             names[key] = label

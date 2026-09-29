@@ -58,8 +58,9 @@ def _add_item(container: dict, key, value, warnings: list) -> None:
     What's left is a collision WITHIN one kind (e.g. a linked file item
     titled "notes.txt" vs an orphan file literally named notes.txt). Those
     still get a numeric suffix and a warning, since the alternative is one
-    of the two silently vanishing. media_items keeps plain string keys (it
-    is its own dict, so nothing else can collide with it).
+    of the two silently vanishing. media_items keeps plain string keys and is
+    its own dict, so it can never collide with text items; two media files
+    can still resolve to one name, and are handled the same way.
     """
     original_key = key
     suffix = 2
@@ -72,7 +73,7 @@ def _add_item(container: dict, key, value, warnings: list) -> None:
         kind = original_key[0] if isinstance(original_key, tuple) else "media file"
         shown = original_key[1] if isinstance(original_key, tuple) else original_key
         new_shown = key[1] if isinstance(key, tuple) else key
-        msg = (f"Title collision on {kind} {shown!r} — another {kind} resolved "
+        msg = (f"Name collision on {kind} {shown!r} — another {kind} resolved "
                f"to the same name. Stored the later one as {new_shown!r} "
                f"instead of silently overwriting the first; check both in "
                f"Canvas if this looks wrong.")
@@ -116,12 +117,11 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "") -
     warnings       = []
 
     # Diagnostic counters — tallied from EVERY manifest item of the given
-    # type, before the "drop fully-blank entries" filter below runs. If
-    # they were instead derived from text_items after filtering, an
-    # assignment/quiz whose content genuinely failed to parse would be
-    # silently dropped from text_items by that same filter and vanish
-    # from these counts too — defeating the exact diagnostic meant to
-    # catch that failure.
+    # type, before the has_known_path filter below runs. If they were
+    # instead derived from text_items after filtering, an assignment/quiz
+    # whose paths failed to resolve would be silently dropped from
+    # text_items by that same filter and vanish from these counts too —
+    # defeating the exact diagnostic meant to catch that failure.
     assignment_total, assignment_with_fields = 0, 0
     quiz_total, quiz_with_questions = 0, 0
 
