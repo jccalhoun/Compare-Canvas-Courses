@@ -37,18 +37,15 @@ def _find_correct_response_idents(item_soup) -> set:
     return correct
 
 
-def extract_quiz_questions(raw: str) -> str:
+def _questions_from_soup(soup, numbered: bool) -> str:
     """
-    Parse a QTI 1.2 assessment XML (Canvas Classic Quiz export) into a
-    normalized, human-readable block of question text and answer choices
-    (correct choices marked), suitable for line-by-line diffing.
-
-    Best-effort: handles multiple choice, true/false, multiple answer,
-    and short answer/essay questions cleanly. More exotic question types
-    (matching, fill-in-multiple-blanks, formula questions) will still show
-    their question text but may not render every sub-part of the answer.
+    The question text, answer choices and metadata of every <item>, as
+    readable text for a line-by-line diff. numbered=True labels questions
+    "Q1", "Q2", ... by position (right for a quiz, whose order students see).
+    numbered=False labels each by its own title instead ("Chapter11-02"):
+    in a bank of dozens of questions, a position number would change for
+    every question after an inserted or removed one.
     """
-    soup = BeautifulSoup(raw, "xml")
     blocks = []
     for i, item in enumerate(soup.find_all("item"), start=1):
         qtype  = ""
@@ -78,11 +75,13 @@ def extract_quiz_questions(raw: str) -> str:
         for label_tag in item.find_all("response_label"):
             ident = label_tag.get("ident", "")
             mt = label_tag.find("mattext")
-            text = clean_html(mt.text) if mt else ""
+            # One answer is one line: inline formatting (<i>, <b>, ...) would
+            # otherwise split it across several lines under a single bullet.
+            text = " ".join(clean_html(mt.text).split()) if mt else ""
             marker = " (correct)" if ident in correct_idents else ""
             choices.append(f"  - {text}{marker}")
 
-        header = f"Q{i}"
+        header = f"Q{i}" if numbered else (item.get("title", "").strip() or "(untitled question)")
         if qtype:
             header += f" [{qtype}]"
         if points:
@@ -95,3 +94,40 @@ def extract_quiz_questions(raw: str) -> str:
         blocks.append("\n".join(block))
 
     return "\n\n".join(blocks)
+
+
+def extract_quiz_questions(raw: str) -> str:
+    """
+    Parse a QTI 1.2 assessment XML (Canvas Classic Quiz export) into a
+    normalized, human-readable block of question text and answer choices
+    (correct choices marked), suitable for line-by-line diffing.
+
+    Best-effort: handles multiple choice, true/false, multiple answer,
+    and short answer/essay questions cleanly. More exotic question types
+    (matching, fill-in-multiple-blanks, formula questions) will still show
+    their question text but may not render every sub-part of the answer.
+    """
+    return _questions_from_soup(BeautifulSoup(raw, "xml"), numbered=True)
+
+
+def parse_bank(raw: str) -> dict:
+    """
+    Parse a question bank (a QTI <objectbank>, as found in the export's
+    non_cc_assessments/ folder). Returns its title, its state, and its
+    questions in the same readable form as a quiz. The bank_context_uuid is
+    left out: it identifies the course, so it differs between any two.
+    """
+    soup = BeautifulSoup(raw, "xml")
+    bank = soup.find("objectbank")
+    meta = {}
+    if bank is not None:
+        block = bank.find("qtimetadata", recursive=False)
+        for f in block.find_all("qtimetadatafield", recursive=False) if block is not None else []:
+            label, entry = f.find("fieldlabel"), f.find("fieldentry")
+            if label is not None and entry is not None:
+                meta[label.text.strip()] = entry.text.strip()
+    return {
+        "title":     meta.get("bank_title") or (bank.get("ident", "") if bank is not None else ""),
+        "state":     meta.get("bank_state", ""),
+        "questions": _questions_from_soup(soup, numbered=False),
+    }

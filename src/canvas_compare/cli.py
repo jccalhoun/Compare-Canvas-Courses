@@ -19,6 +19,11 @@ Also compare Classic Quiz questions (off by default — slower on courses
 with many quizzes/question banks):
     python compare_canvas_courses.py last_summer.imscc this_summer.imscc --quizzes
 
+Leave settings out of the comparison, or whole sections out:
+    python compare_canvas_courses.py last_summer.imscc this_summer.imscc --ignore lockdown,published
+    python compare_canvas_courses.py last_summer.imscc this_summer.imscc --skip files,media
+    python compare_canvas_courses.py --list-options        # everything these accept
+
 Requirements:
     pip install beautifulsoup4 lxml
     pip install python-docx python-pptx   # optional, for .docx/.pptx support
@@ -50,6 +55,8 @@ import zipfile
 
 from .diff import compare_courses
 from .loader import load_course
+from .options import (IGNORE_GROUPS, SECTIONS, CompareOptions, apply_ignored_fields,
+                      parse_names)
 from .parse_manifest import MissingManifestError
 from .parse_office import missing_optional_deps
 from .report_html import format_html_report
@@ -61,8 +68,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Compare two Canvas .imscc course exports."
     )
-    parser.add_argument("last_summer", help="Path to last summer's .imscc file")
-    parser.add_argument("this_summer", help="Path to this summer's .imscc file")
+    parser.add_argument("last_summer", nargs="?", help="Path to last summer's .imscc file")
+    parser.add_argument("this_summer", nargs="?", help="Path to this summer's .imscc file")
     parser.add_argument("--output", "-o",
                         help="Save a plain text report to this file path (optional)",
                         default=None)
@@ -70,9 +77,43 @@ def main():
                         help="Save an HTML report with side-by-side diffs to this file path (optional)",
                         default=None)
     parser.add_argument("--quizzes", action="store_true",
-                        help="Also compare Classic Quiz question text and answer choices "
+                        help="Also compare Classic Quiz questions and question banks "
                              "(off by default — slower on courses with many quizzes/questions)")
+    parser.add_argument("--skip", action="append", metavar="SECTIONS",
+                        help="Leave whole sections out, comma-separated (see --list-options)")
+    parser.add_argument("--ignore", action="append", metavar="NAMES",
+                        help="Leave settings out of the comparison, comma-separated: a group "
+                             "name (see --list-options) or any individual field name")
+    parser.add_argument("--list-options", action="store_true",
+                        help="Show what --skip and --ignore accept, then exit")
     args = parser.parse_args()
+
+    if args.list_options:
+        print("--skip takes any of (the section is not read at all):")
+        for name, desc in SECTIONS.items():
+            print(f"    {name:<10} {desc}")
+        print("\n--ignore takes any of (the setting is read but left out of the comparison):")
+        for name, (desc, _, _) in IGNORE_GROUPS.items():
+            print(f"    {name:<10} {desc}")
+        print("    ...or the name of any field shown as 'Field: name' in a report, "
+              "e.g. --ignore points_possible,submission_types")
+        return
+    if not (args.last_summer and args.this_summer):
+        parser.error("two .imscc files are required (the old course, then the new one)")
+
+    skip = set(parse_names(args.skip))
+    unknown = skip - set(SECTIONS)
+    if unknown:
+        parser.error(f"unknown section(s) for --skip: {', '.join(sorted(unknown))} "
+                     f"(choose from: {', '.join(SECTIONS)})")
+    ignore = parse_names(args.ignore)
+    options = CompareOptions(
+        quiz_questions=args.quizzes,
+        banks=args.quizzes,
+        skip=frozenset(skip),
+        ignore_groups=frozenset(n for n in ignore if n in IGNORE_GROUPS),
+        ignore_fields=frozenset(n for n in ignore if n not in IGNORE_GROUPS),
+    )
 
     missing = missing_optional_deps()
     if missing:
@@ -86,7 +127,7 @@ def main():
 
     def _load(path: str, label: str):
         try:
-            return load_course(path, parse_quizzes=args.quizzes, label=label)
+            return load_course(path, label=label, options=options)
         except FileNotFoundError:
             print(f"Error: file not found — {path}", file=sys.stderr)
             sys.exit(1)
@@ -102,32 +143,43 @@ def main():
     new_label = short_label(args.this_summer)
 
     print(f"Loading {old_label} : {args.last_summer}")
-    old_text, old_media, old_skipped, old_warnings = _load(args.last_summer, old_label)
-    print(f"  {len(old_text)} content items, {len(old_media)} media files"
-          + (f", {old_skipped} docx/pptx skipped" if old_skipped else ""))
+    old = _load(args.last_summer, old_label)
+    print(f"  {len(old.text_items)} content items, {len(old.media_items)} media files"
+          + (f", {len(old.other_files)} other files" if old.other_files else "")
+          + (f", {old.skipped_office} docx/pptx skipped" if old.skipped_office else ""))
 
     print(f"Loading {new_label} : {args.this_summer}")
-    new_text, new_media, new_skipped, new_warnings = _load(args.this_summer, new_label)
-    print(f"  {len(new_text)} content items, {len(new_media)} media files"
-          + (f", {new_skipped} docx/pptx skipped" if new_skipped else "") + "\n")
+    new = _load(args.this_summer, new_label)
+    print(f"  {len(new.text_items)} content items, {len(new.media_items)} media files"
+          + (f", {len(new.other_files)} other files" if new.other_files else "")
+          + (f", {new.skipped_office} docx/pptx skipped" if new.skipped_office else "") + "\n")
 
-    all_warnings = old_warnings + new_warnings
+    all_warnings = old.warnings + new.warnings
+
+    # Settings the options leave out are removed from both courses before comparing.
+    dropped = apply_ignored_fields(old.text_items, options) | apply_ignored_fields(new.text_items, options)
+    for name in sorted(options.ignore_fields - dropped):
+        print(f"Notice: no field called '{name}' was found in either course, so --ignore {name} "
+              f"had no effect. (Groups: {', '.join(IGNORE_GROUPS)}.)\n")
+    notes = options.describe(dropped)
 
     print("Comparing...")
-    report = compare_courses(old_text, old_media, new_text, new_media, old_label, new_label)
+    report = compare_courses(old.text_items, old.media_items, new.text_items, new.media_items,
+                             old_label, new_label,
+                             old_other=old.other_files, new_other=new.other_files)
 
     # Colored version for the terminal; plain version for any saved file
     # (escape codes in a text file you open later are just noise).
-    print("\n" + format_report(report, args.last_summer, args.this_summer, use_colors=True, warnings=all_warnings))
+    print("\n" + format_report(report, args.last_summer, args.this_summer, use_colors=True, warnings=all_warnings, notes=notes))
 
     if args.output:
         with open(args.output, "w", encoding="utf-8") as f:
-            f.write(format_report(report, args.last_summer, args.this_summer, use_colors=False, warnings=all_warnings))
+            f.write(format_report(report, args.last_summer, args.this_summer, use_colors=False, warnings=all_warnings, notes=notes))
         print(f"Text report saved to: {args.output}")
 
     if args.html:
         with open(args.html, "w", encoding="utf-8") as f:
-            f.write(format_html_report(report, args.last_summer, args.this_summer, warnings=all_warnings))
+            f.write(format_html_report(report, args.last_summer, args.this_summer, warnings=all_warnings, notes=notes))
         print(f"HTML report saved to: {args.html}")
 
 

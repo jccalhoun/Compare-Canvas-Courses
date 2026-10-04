@@ -6,7 +6,7 @@ from .utils import short_label
 
 
 def format_report(report: dict, old_path: str, new_path: str, use_colors: bool = False,
-                   warnings: list = None) -> str:
+                   warnings: list = None, notes: list = None) -> str:
     """
     Render the plain-text report. When use_colors is True, wraps added/
     removed/modified lines (and diff +/- lines) in ANSI escape codes for
@@ -32,6 +32,9 @@ def format_report(report: dict, old_path: str, new_path: str, use_colors: bool =
     n_mod = len(report["modified"])
     n_unc = len(report["unchanged"])
     m     = report["media"]
+    o     = report.get("other") or {}
+    has_other = any(o.get(k) for k in ("added", "removed", "renamed", "changed", "unchanged"))
+    media_renamed = f" | {len(m['renamed'])} renamed" if m.get("renamed") else ""
 
     lines += [
         SEP,
@@ -43,9 +46,14 @@ def format_report(report: dict, old_path: str, new_path: str, use_colors: bool =
         f"  Content  — {C_ADD}{n_add} added{C_RST} | {C_REM}{n_rem} removed{C_RST} | "
         f"{C_MOD}{n_mod} modified{C_RST} | {n_unc} unchanged",
         f"  Media    — {C_ADD}{len(m['added'])} added{C_RST} | {C_REM}{len(m['removed'])} removed{C_RST} | "
-        f"{C_MOD}{len(m['changed'])} changed{C_RST} | {len(m['unchanged'])} unchanged",
-        SEP, "",
+        f"{C_MOD}{len(m['changed'])} changed{C_RST}{media_renamed} | {len(m['unchanged'])} unchanged",
     ]
+    if has_other:
+        lines.append(
+            f"  Files    — {C_ADD}{len(o['added'])} added{C_RST} | {C_REM}{len(o['removed'])} removed{C_RST} | "
+            f"{C_MOD}{len(o['changed'])} changed{C_RST} | {len(o['renamed'])} renamed | {len(o['unchanged'])} unchanged")
+    lines += [f"  {n}" for n in notes or []]   # what the options left out, if anything
+    lines += [SEP, ""]
 
     if warnings:
         lines.append(DASH)
@@ -95,9 +103,22 @@ def format_report(report: dict, old_path: str, new_path: str, use_colors: bool =
         lines.append("  (none)")
     lines.append("")
 
-    section(f"UNCHANGED ({n_unc})", "",
-            report["unchanged"],
-            lambda t: f"  ✓ {t}")
+    # Unchanged rubrics and question banks are only counted: a course can
+    # have well over a hundred of each, and they'd bury everything else.
+    collapsed = (("[Bank] ", "question bank(s)"), ("[Rubric] ", "rubric(s)"))
+    listed = [t for t in report["unchanged"] if not t.startswith(tuple(p for p, _ in collapsed))]
+    lines.append(DASH)
+    lines.append(f"  UNCHANGED ({n_unc})")
+    lines.append(DASH)
+    for t in listed:
+        lines.append(f"  ✓ {t}")
+    for prefix, noun in collapsed:
+        n = sum(1 for t in report["unchanged"] if t.startswith(prefix))
+        if n:
+            lines.append(f"  ✓ {n} {noun} (not listed)")
+    if not report["unchanged"]:
+        lines.append("  (none)")
+    lines.append("")
 
     # ── Media section ────────────────────────────────────────────────────────
 
@@ -116,6 +137,12 @@ def format_report(report: dict, old_path: str, new_path: str, use_colors: bool =
     if not m["removed"]:
         lines.append("    (none)")
     lines.append("")
+
+    if m.get("renamed"):
+        lines.append(f"  Renamed or moved — identical content ({len(m['renamed'])}):")
+        for old_name, new_name in m["renamed"]:
+            lines.append(f"{C_MOD}    ▸ {old_name}  →  {new_name}{C_RST}")
+        lines.append("")
 
     lines.append(f"  Changed — different size or content, possible replacement ({len(m['changed'])}):")
     for t, (old_sz, _old_crc), (new_sz, _new_crc) in m["changed"]:
@@ -136,6 +163,36 @@ def format_report(report: dict, old_path: str, new_path: str, use_colors: bool =
     if not m["unchanged"]:
         lines.append("    (none)")
     lines.append("")
+
+    if has_other:
+        lines += [SEP, f"{C_HDR}  OTHER COURSE FILES (PDFs, images, ...){C_RST}", SEP, ""]
+        for title, key, color, sign in (("Added", "added", C_ADD, "+"), ("Removed", "removed", C_REM, "-")):
+            lines.append(f"  {title} ({len(o[key])}):")
+            for t in o[key]:
+                lines.append(f"{color}    {sign} {t}{C_RST}")
+            if not o[key]:
+                lines.append("    (none)")
+            lines.append("")
+        lines.append(f"  Renamed or moved — identical content ({len(o['renamed'])}):")
+        for old_name, new_name in o["renamed"]:
+            lines.append(f"{C_MOD}    ▸ {old_name}  →  {new_name}{C_RST}")
+        if not o["renamed"]:
+            lines.append("    (none)")
+        lines.append("")
+        lines.append(f"  Changed — different size or content ({len(o['changed'])}):")
+        for t, (old_sz, _old_crc), (new_sz, _new_crc) in o["changed"]:
+            lines.append(f"{C_MOD}    ▸ {t}{C_RST}")
+            if old_sz != new_sz:
+                delta = new_sz - old_sz
+                lines.append(f"{C_MOD}      {old_sz:,} bytes → {new_sz:,} bytes  ({'+' if delta >= 0 else ''}{delta:,}){C_RST}")
+            else:
+                lines.append(f"{C_MOD}      same size ({old_sz:,} bytes) — content differs{C_RST}")
+        if not o["changed"]:
+            lines.append("    (none)")
+        lines.append("")
+        # Unchanged files are only counted: there can be well over a hundred.
+        lines.append(f"  Unchanged: {len(o['unchanged'])} file(s) (not listed)")
+        lines.append("")
 
     lines.append(SEP)
     return "\n".join(lines)

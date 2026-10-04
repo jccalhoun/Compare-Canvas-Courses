@@ -12,7 +12,8 @@ import html
 from .utils import short_label
 
 
-def format_html_report(report: dict, old_path: str, new_path: str, warnings: list = None) -> str:
+def format_html_report(report: dict, old_path: str, new_path: str, warnings: list = None,
+                       notes: list = None) -> str:
     """
     Generates a standalone HTML dashboard with tables and side-by-side
     diffs. `warnings` (from load_course) render as a callout up top when
@@ -20,6 +21,9 @@ def format_html_report(report: dict, old_path: str, new_path: str, warnings: lis
     opened later, not just in whatever terminal produced it.
     """
     d = difflib.HtmlDiff(wrapcolumn=90)
+    o = report.get("other") or {}
+    has_other = any(o.get(k) for k in ("added", "removed", "renamed", "changed", "unchanged"))
+    has_renamed = bool(report["media"].get("renamed") or o.get("renamed"))
     esc = html.escape
 
     old_label = short_label(old_path)
@@ -60,11 +64,15 @@ def format_html_report(report: dict, old_path: str, new_path: str, warnings: lis
         "table.diff .diff_sub { background: #fcc; }",
         ".warning-box { margin-bottom: 20px; padding: 12px 16px; background: #fff3cd; border-left: 4px solid #856404; color: #533f03; }",
         ".warning-box ul { margin: 6px 0 0 0; padding-left: 20px; }",
-        "</style></head><body><div class='container'>",
+        (".b-renamed { background: #d1ecf1; color: #0c5460; }" if has_renamed else "")
+        + "</style></head><body><div class='container'>",
         "<h1>Canvas Course Comparison</h1>",
         f"<p><strong>{esc(old_label)}:</strong> {esc(old_path)}<br>"
         f"<strong>{esc(new_label)}:</strong> {esc(new_path)}</p>",
     ]
+
+    if notes:   # what the options left out of this comparison
+        out.append("<p style='font-style:italic'>" + "<br>".join(esc(n) for n in notes) + "</p>")
 
     if warnings:
         out.append("<div class='warning-box'><strong>Diagnostic warnings</strong><ul>")
@@ -89,6 +97,8 @@ def format_html_report(report: dict, old_path: str, new_path: str, warnings: lis
         out.append(f"<tr><td>{esc(t)}</td><td><span class='badge b-added'>Added</span></td><td></td></tr>")
     for t in m["removed"]:
         out.append(f"<tr><td>{esc(t)}</td><td><span class='badge b-removed'>Removed</span></td><td></td></tr>")
+    for old_name, new_name in m.get("renamed", []):
+        out.append(f"<tr><td>{esc(old_name)} &rarr; {esc(new_name)}</td><td><span class='badge b-renamed'>Renamed</span></td><td>identical content</td></tr>")
     for t, (old_sz, _old_crc), (new_sz, _new_crc) in m["changed"]:
         if old_sz != new_sz:
             detail = f"{old_sz:,} bytes &rarr; {new_sz:,} bytes"
@@ -96,6 +106,24 @@ def format_html_report(report: dict, old_path: str, new_path: str, warnings: lis
             detail = f"same size ({old_sz:,} bytes) &mdash; content differs"
         out.append(f"<tr><td>{esc(t)}</td><td><span class='badge b-modified'>Changed</span></td><td>{detail}</td></tr>")
     out.append("</table>")
+
+    if has_other:
+        out.append("<h2>Other Course Files (PDFs, images, ...)</h2>")
+        out.append("<table class='overview'><tr><th>File Name</th><th>Status</th><th>Details</th></tr>")
+        for t in o["added"]:
+            out.append(f"<tr><td>{esc(t)}</td><td><span class='badge b-added'>Added</span></td><td></td></tr>")
+        for t in o["removed"]:
+            out.append(f"<tr><td>{esc(t)}</td><td><span class='badge b-removed'>Removed</span></td><td></td></tr>")
+        for old_name, new_name in o["renamed"]:
+            out.append(f"<tr><td>{esc(old_name)} &rarr; {esc(new_name)}</td><td><span class='badge b-renamed'>Renamed</span></td><td>identical content</td></tr>")
+        for t, (old_sz, _old_crc), (new_sz, _new_crc) in o["changed"]:
+            if old_sz != new_sz:
+                detail = f"{old_sz:,} bytes &rarr; {new_sz:,} bytes"
+            else:
+                detail = f"same size ({old_sz:,} bytes) &mdash; content differs"
+            out.append(f"<tr><td>{esc(t)}</td><td><span class='badge b-modified'>Changed</span></td><td>{detail}</td></tr>")
+        out.append("</table>")
+        out.append(f"<p>{len(o['unchanged'])} other file(s) unchanged (not listed).</p>")
 
     if report["modified"]:
         out.append("<div class='diff-section'><h2>Detailed Modifications</h2>")

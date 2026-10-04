@@ -92,3 +92,30 @@ def clean_html(raw: str) -> str:
     lines = [l.strip() for l in soup.get_text(separator="\n").splitlines()]
     text = "\n".join(l for l in lines if l)
     return strip_canvas_reference_tokens(text)
+
+
+# Per-export or non-content settings Canvas also writes into a page's head.
+_IGNORED_META = {"identifier", "editor_type"}
+
+
+def extract_page_meta(raw: str) -> dict:
+    """
+    The settings Canvas writes into each exported page's <head> as
+    <meta name="..." content="...">: whether the page is published
+    (workflow_state), who may edit it (editing_roles), and so on. They are
+    not part of the visible text, so clean_html never sees them.
+
+    Left out: `identifier` (an id that differs between exports), `editor_type`
+    (rich-text vs HTML editor, which says nothing about the content), and
+    anything that looks like a date, as elsewhere in this tool.
+    """
+    head = BeautifulSoup(raw, "html.parser").find("head")
+    meta = {}
+    for tag in head.find_all("meta") if head is not None else []:
+        name, content = tag.get("name"), tag.get("content")
+        if not name or content is None:
+            continue
+        if name in _IGNORED_META or name.endswith("_at") or "date" in name:
+            continue
+        meta[name] = content.strip()
+    return meta

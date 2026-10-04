@@ -37,25 +37,26 @@ def missing_optional_deps() -> list[str]:
 
 
 def extract_docx_text(raw_bytes: bytes) -> str:
+    """
+    Paragraph text of a .docx. Raises if the file can't be read; the loader
+    turns that into a warning and leaves the file out. (Returning an error
+    message as the "text" would make two different corrupt files compare as
+    identical, and so as "unchanged".)
+    """
     if _docx is None:
-        return "[python-docx not installed — install it to compare .docx files]"
-    try:
-        doc = _docx.Document(io.BytesIO(raw_bytes))
-        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-    except Exception as e:
-        return f"[Error reading .docx: {e}]"
+        raise RuntimeError("python-docx is not installed")
+    doc = _docx.Document(io.BytesIO(raw_bytes))
+    return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
 
 
 def extract_pptx_text(raw_bytes: bytes) -> str:
+    """All slide text of a .pptx. Raises if unreadable, for the same reason."""
     if _Presentation is None:
-        return "[python-pptx not installed — install it to compare .pptx files]"
-    try:
-        prs = _Presentation(io.BytesIO(raw_bytes))
-        lines = []
-        for slide in prs.slides:
-            for shape in slide.shapes:
-                if hasattr(shape, "text") and shape.text.strip():
-                    lines.append(shape.text.strip())
-        return "\n".join(lines)
-    except Exception as e:
-        return f"[Error reading .pptx: {e}]"
+        raise RuntimeError("python-pptx is not installed")
+    prs = _Presentation(io.BytesIO(raw_bytes))
+    lines = []
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if hasattr(shape, "text") and shape.text.strip():
+                lines.append(shape.text.strip())
+    return "\n".join(lines)
