@@ -104,3 +104,54 @@ def test_html_in_a_setting_is_shown_as_text_and_diffed_line_by_line(make_imscc, 
     change = report["modified"][0][1][0]
     assert change["label"] == "Field: description" and change["kind"] == "text"
     assert "<p>" not in change["diff"] and "-click here" in change["diff"]
+
+
+def classic_quiz_course(make_imscc, name, quizzes):
+    """quizzes: [(id, title, question-or-None)] — None means the export has no questions (a New Quiz)."""
+    res, items, files = [], [], {}
+    for qid, title, question in quizzes:
+        res.append(f'<resource identifier="{qid}" type="imsqti_xmlv1p2/imscc_xmlv1p1/assessment">'
+                   f'<file href="{qid}/qti.xml"/><dependency identifierref="{qid}m"/></resource>'
+                   f'<resource identifier="{qid}m" type="{LAR}" href="{qid}/assessment_meta.xml">'
+                   f'<file href="{qid}/assessment_meta.xml"/></resource>')
+        items.append((qid, qid, title))
+        item = (f'<item ident="i" title="Q"><presentation><material><mattext>{question}</mattext></material>'
+                f'</presentation></item>') if question else ""
+        files[f"{qid}/qti.xml"] = f'<questestinterop><assessment ident="a"><section ident="s">{item}</section></assessment></questestinterop>'
+        files[f"{qid}/assessment_meta.xml"] = f"<quiz><title>{title}</title><points_possible>10</points_possible></quiz>"
+    files["imsmanifest.xml"] = manifest(items, res)
+    return make_imscc(name, files)
+
+
+def test_quizzes_whose_questions_are_not_in_the_export_are_named_in_a_notice(make_imscc, compare):
+    """Such a quiz compares as 'unchanged' in both courses; the report must say its questions weren't compared."""
+    path = classic_quiz_course(make_imscc, "c", [("qa", "Classic quiz", "What is 2+2?"), ("qb", "New-style quiz", None)])
+    report, loaded, _ = compare(path, path, quizzes=True)
+    assert modified_titles(report) == []
+    assert loaded.warnings == [] and "1 quiz(zes) had no questions" in loaded.notices[0] and "'New-style quiz'" in loaded.notices[0]
+
+
+def test_when_no_quiz_has_questions_it_is_a_warning_not_a_notice(make_imscc, compare):
+    """All quizzes empty points at a parsing problem, not New Quizzes, so it stays a warning."""
+    path = classic_quiz_course(make_imscc, "c", [("qa", "One", None), ("qb", "Two", None)])
+    _, loaded, _ = compare(path, path, quizzes=True)
+    assert any("none produced any question text" in w for w in loaded.warnings) and loaded.notices == []
+
+
+def test_a_page_whose_file_is_missing_from_one_export_is_modified_not_removed(make_imscc, compare):
+    res = [page_resource("p", "wiki_content/rules.html")]
+    old = make_imscc("old", {"imsmanifest.xml": manifest([("1", "p", "Rules")], res), "wiki_content/rules.html": html("Rules.")})
+    new = make_imscc("new", {"imsmanifest.xml": manifest([("1", "p", "Rules")], res)})          # file absent
+    report, *_ = compare(old, new)
+    assert report["removed"] == [] and modified_titles(report) == ["Rules"]
+
+
+def test_a_changed_link_to_a_course_file_is_detected(make_imscc, compare):
+    """Canvas writes links to course files as $IMS-CC-FILEBASE$ tokens; the target is part of the compared text."""
+    res = [page_resource("p", "wiki_content/r.html")]
+    def build(name, target):
+        return make_imscc(name, {"imsmanifest.xml": manifest([("1", "p", "Reading")], res),
+                                 "wiki_content/r.html": html(f'<a href="$IMS-CC-FILEBASE$/{target}">Reading</a>')})
+    report, *_ = compare(build("old", "chapter1.pdf"), build("new", "chapter2.pdf"))
+    assert modified_titles(report) == ["Reading"]
+    assert "chapter2.pdf" in report["modified"][0][1][0]["diff"]

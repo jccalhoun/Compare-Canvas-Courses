@@ -201,6 +201,7 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "",
     # defeating the exact diagnostic meant to catch that failure.
     assignment_total, assignment_with_fields = 0, 0
     quiz_total, quiz_with_questions = 0, 0
+    quizzes_without_questions = []   # titles of quizzes whose export carried no questions
 
     with zipfile.ZipFile(imscc_path, "r") as z:
         all_files      = {info.filename: info for info in z.infolist()}
@@ -297,6 +298,7 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "",
                         "this export format), or a quiz drawing from a "
                         "linked question bank not inlined in this file]"
                     )
+                    quizzes_without_questions.append(title)
                 processed.add(info["quiz_path"])
 
             if info["type"] == "assignment":
@@ -356,6 +358,17 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "",
                    f"resource is wrapped.")
             warnings.append(msg)
             print(f"  Warning: {msg}", file=sys.stderr)
+        elif quizzes_without_questions:
+            # Some (not all) quizzes had no questions in the export. If the
+            # same quiz is like that in both courses it compares as
+            # "unchanged" without its questions ever being compared, so say
+            # so at the top of the report rather than only inside a diff.
+            n = len(quizzes_without_questions)
+            shown = ", ".join(repr(t) for t in quizzes_without_questions[:3]) + (f" (+{n - 3} more)" if n > 3 else "")
+            msg = (f"{label}: {n} quiz(zes) had no questions in this export, so their questions could "
+                   f"not be compared (likely New Quizzes, or questions drawn from a linked bank): {shown}.")
+            notices.append(msg)
+            print(f"  Note: {msg}", file=sys.stderr)
 
         # ── Course-level content outside the item tree ───────────────────────
         # Module structure and the syllabus. If a manifest item already read
@@ -531,7 +544,7 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "",
     if skipped_office:
         # Also printed once at the start by the command line, but a SAVED report
         # must say so too, or it reads as a complete comparison.
+        missing = missing_optional_deps()
         warnings.append(f"{label}: {skipped_office} .docx/.pptx file(s) were not compared because "
-                        f"{' and '.join(missing_optional_deps())} "
-                        f"{'is' if len(missing_optional_deps()) == 1 else 'are'} not installed.")
+                        f"{' and '.join(missing)} {'is' if len(missing) == 1 else 'are'} not installed.")
     return LoadedCourse(text_items, media_items, other_files, skipped_office, warnings, notices)

@@ -45,7 +45,7 @@ def parse_manifest(z: zipfile.ZipFile) -> tuple[dict, dict]:
         discussion_path = None
         quiz_path       = None
 
-        if "imsdt" in rtype or ("discussion" in href and href.endswith(".xml")):
+        if "imsdt" in rtype or ("discussion" in href and href.lower().endswith(".xml")):
             # The topic XML is normally the resource's href, but the
             # Common Cartridge discussion resource type may carry it only as a
             # <file> child. Without this a discussion with no href was
@@ -61,12 +61,12 @@ def parse_manifest(z: zipfile.ZipFile) -> tuple[dict, dict]:
             # limit) lives in a separate assessment_meta.xml resolved below
             # via the same dependency mechanism used for assignment settings.
             res_type = "quiz"
-            if href.endswith(".xml"):
+            if href.lower().endswith(".xml"):
                 quiz_path = href
             else:
                 for f in res.find_all("file"):
                     fhref = unquote(f.get("href", ""))
-                    if fhref.endswith(".xml"):
+                    if fhref.lower().endswith(".xml"):
                         quiz_path = fhref
                         break
         elif "learning-application-resource" in rtype or "assignment" in href:
@@ -80,12 +80,12 @@ def parse_manifest(z: zipfile.ZipFile) -> tuple[dict, dict]:
             # its instructions, and the same HTML separately fell through
             # to the unlinked-file loop as an orphan "[Page] ..." entry —
             # fragmenting one logical item into two unrelated diff lines.
-            if href.endswith((".html", ".htm")):
+            if href.lower().endswith((".html", ".htm")):
                 html_path = href
             else:
                 for f in res.find_all("file"):
                     fhref = unquote(f.get("href", ""))
-                    if fhref.endswith((".html", ".htm")):
+                    if fhref.lower().endswith((".html", ".htm")):
                         html_path = fhref
                         break
             # Settings XML (assignment_settings.xml) is frequently just a
@@ -99,17 +99,17 @@ def parse_manifest(z: zipfile.ZipFile) -> tuple[dict, dict]:
             # this just also covers the one that doesn't.
             for f in res.find_all("file"):
                 fhref = unquote(f.get("href", ""))
-                if fhref.endswith(".xml"):
+                if fhref.lower().endswith(".xml"):
                     settings_path = fhref
                     break
             res_type = "assignment"
         else:
-            if href.endswith((".html", ".htm")):
+            if href.lower().endswith((".html", ".htm")):
                 html_path = href
             else:
                 for f in res.find_all("file"):
                     fhref = unquote(f.get("href", ""))
-                    if fhref.endswith((".html", ".htm")):
+                    if fhref.lower().endswith((".html", ".htm")):
                         html_path = fhref
                         break
             res_type = "other"
@@ -147,7 +147,7 @@ def parse_manifest(z: zipfile.ZipFile) -> tuple[dict, dict]:
             candidates = [dep.get("href", "")] + dep.get("file_hrefs", [])
             resolved = False
             for cand in candidates:
-                if cand.endswith(".xml"):
+                if cand.lower().endswith(".xml"):
                     info["settings_path"] = cand
                     resolved = True
                     break

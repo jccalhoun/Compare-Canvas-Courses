@@ -76,7 +76,8 @@ and a file moved between folders. Empty files are never paired this way.
   every part of the answer.
 - **New Quizzes** — question content for New Quizzes isn't included in the Common
   Cartridge export format at all. With `--quizzes`, those quizzes are flagged with a
-  "No questions found in this export" note rather than compared.
+  "No questions found in this export" note rather than compared, and the note at the top
+  of the report names them, so "unchanged" is never mistaken for "checked".
 - **Grade weights / assignment groups** — course grading structure is not examined
 - **Course settings** — enrollment dates, grading schemes, and other course-level
   settings are not compared
@@ -209,9 +210,10 @@ The report opens with a one-line count for content and for media:
 
 If the tool noticed something that may make the results unreliable (for example, it
 found assignments but couldn't read any of their settings), a **DIAGNOSTIC WARNINGS**
-section appears right after this summary. Purely informational messages (for example,
-that several question banks share a name and were paired by content) appear instead as a
-short italic note at the top, so the warnings box is kept for things that need attention. It is also included in saved reports.
+section appears right after this summary, in saved reports as well as on screen. Purely
+informational messages (for example, that several question banks share a name and were
+paired by content) appear instead as a short italic note at the top, so the warnings box
+is kept for things that need attention.
 
 ### Content section
 

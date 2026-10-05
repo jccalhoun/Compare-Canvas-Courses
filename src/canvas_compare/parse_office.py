@@ -50,9 +50,12 @@ def _docx_table_lines(table) -> list[str]:
     for row in table.rows:
         cells, seen = [], set()
         for cell in row.cells:
-            if id(cell._tc) in seen:        # a merged cell is repeated per column
+            # A merged cell is repeated once per column it spans. Track the cell
+            # elements themselves rather than id()s, so correctness never
+            # depends on the objects staying alive for the whole loop.
+            if cell._tc in seen:
                 continue
-            seen.add(id(cell._tc))
+            seen.add(cell._tc)
             cells.append(_cell_text(cell.text))
             nested.extend(cell.tables)
         if any(cells):

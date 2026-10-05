@@ -93,3 +93,30 @@ def test_discussion_exactly_as_canvas_exports_it(make_imscc, compare):
     report, old, _ = compare(build("old", "Introduce yourself."), build("new", "Describe your goals."))
     assert old.text_items[("item", "Week 1 Discussion")]["fields"]["points_possible"] == "10"
     assert [c["label"] for _, changes in report["modified"] for c in changes] == ["Discussion Text"]
+
+
+def test_uppercase_html_extension_is_still_a_page(make_imscc, compare):
+    """An uploaded file named Week1.HTML, linked from a module, must be read as that module item."""
+    res = ['<resource identifier="p" type="webcontent" href="web_resources/Week1.HTML"><file href="web_resources/Week1.HTML"/></resource>']
+    def build(name, body):
+        return make_imscc(name, {"imsmanifest.xml": manifest([("1", "p", "Week 1 Overview")], res),
+                                 "web_resources/Week1.HTML": html(body)})
+    report, *_ = compare(build("old", "Old overview."), build("new", "New overview."))
+    assert modified_titles(report) == ["Week 1 Overview"]                  # not an orphan "[Page] web_resources/Week1.HTML"
+
+
+
+def qti(question):
+    return ('<questestinterop><assessment ident="a" title="Quiz 1"><section ident="root">'
+            f'<item ident="q1" title="Question"><presentation><material><mattext>{question}</mattext></material>'
+            '<response_lid ident="r"><render_choice><response_label ident="x"><material><mattext>Yes</mattext></material>'
+            '</response_label></render_choice></response_lid></presentation></item></section></assessment></questestinterop>')
+
+
+def test_uppercase_quiz_qti_file_is_read(make_imscc, compare):
+    """A quiz whose QTI file is named QTI.XML: its questions must still be compared."""
+    res = ['<resource identifier="q" type="imsqti_xmlv1p2/imscc_xmlv1p1/assessment"><file href="quiz/QTI.XML"/></resource>']
+    def build(name, question):
+        return make_imscc(name, {"imsmanifest.xml": manifest([("1", "q", "Quiz 1")], res), "quiz/QTI.XML": qti(question)})
+    report, *_ = compare(build("old", "What is 2+2?"), build("new", "What is 3+3?"), quizzes=True)
+    assert modified_titles(report) == ["[Quiz] Quiz 1"]
