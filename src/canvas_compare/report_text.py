@@ -139,7 +139,7 @@ def format_report(report: dict, old_path: str, new_path: str, use_colors: bool =
     lines.append("")
 
     if m.get("renamed"):
-        lines.append(f"  Renamed or moved — identical content ({len(m['renamed'])}):")
+        lines.append(f"  Renamed or moved — same size and checksum ({len(m['renamed'])}):")
         for old_name, new_name in m["renamed"]:
             lines.append(f"{C_MOD}    ▸ {old_name}  →  {new_name}{C_RST}")
         lines.append("")
@@ -173,7 +173,7 @@ def format_report(report: dict, old_path: str, new_path: str, use_colors: bool =
             if not o[key]:
                 lines.append("    (none)")
             lines.append("")
-        lines.append(f"  Renamed or moved — identical content ({len(o['renamed'])}):")
+        lines.append(f"  Renamed or moved — same size and checksum ({len(o['renamed'])}):")
         for old_name, new_name in o["renamed"]:
             lines.append(f"{C_MOD}    ▸ {old_name}  →  {new_name}{C_RST}")
         if not o["renamed"]:

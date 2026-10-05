@@ -46,7 +46,14 @@ def parse_manifest(z: zipfile.ZipFile) -> tuple[dict, dict]:
         quiz_path       = None
 
         if "imsdt" in rtype or ("discussion" in href and href.endswith(".xml")):
-            discussion_path = href
+            # The topic XML is normally the resource's href, but the
+            # Common Cartridge discussion resource type may carry it only as a
+            # <file> child. Without this a discussion with no href was
+            # dropped from the comparison altogether (no path, so nothing to
+            # keep it for).
+            discussion_path = href or next(
+                (unquote(f.get("href", "")) for f in res.find_all("file")
+                 if unquote(f.get("href", "")).lower().endswith(".xml")), None)
             res_type = "discussion"
         elif "imsqti" in rtype:
             # Classic Quiz: the resource's own href (or its .xml <file>) is

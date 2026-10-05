@@ -19,8 +19,8 @@ Due dates and other system timestamps are always ignored.
 | Question banks (with `--quizzes`) | Every question in each bank: text, answer choices (correct ones marked), type and points. Banks are matched by title, and each question is labeled by its own name rather than a position number. |
 | Rubrics | Every rubric in the course: criteria, rating levels, and points. An assignment or graded discussion also shows which rubric it uses. |
 | Classic Quizzes | Quiz-level metadata (e.g. points possible) always; question text, question type, points, and answer choices (correct answers marked) with `--quizzes` |
-| Word documents (`.docx`) | Full paragraph text |
-| PowerPoint files (`.pptx`) | All slide text |
+| Word documents (`.docx`) | Paragraphs, table cells, and headers/footers |
+| PowerPoint files (`.pptx`) | Text boxes (including grouped ones), table cells, and speaker notes |
 | Plain text files (`.txt`, `.csv`, `.md`, `.markdown`) | Full file content |
 
 For every item found in both courses, the report shows a line-by-line diff of
@@ -52,8 +52,9 @@ many. These files are never opened, so even a large course adds almost nothing t
 run time. (`.docx`, `.pptx` and text files are compared by their contents, as above.)
 
 **Renamed or moved files.** A file that disappears under one name and appears under
-another with exactly the same size and checksum is reported as *renamed or moved*, not as
-a removal plus an addition. This covers the `-1` suffix Canvas adds to re-imported files
+another with the same size and CRC-32 checksum is reported as *renamed or moved*, not as
+a removal plus an addition. (A checksum match isn't a mathematical proof that two files are
+identical, but a false match between two different files is about a 1-in-4-billion event.) This covers the `-1` suffix Canvas adds to re-imported files
 and a file moved between folders. Empty files are never paired this way.
 
 ### What is always ignored
@@ -118,7 +119,8 @@ If these are not installed, the script still runs, but `.docx` and `.pptx` files
 rather than shown with a placeholder, because a placeholder would look identical in
 both courses and make every one of them appear "unchanged".) A notice at the start of
 the run tells you when this is happening, and how many files were skipped is shown
-next to each course as it loads.
+next to each course as it loads. The saved report lists them under its diagnostic
+warnings as well, so it never reads as a complete comparison when it wasn't.
 
 ---
 
@@ -207,8 +209,9 @@ The report opens with a one-line count for content and for media:
 
 If the tool noticed something that may make the results unreliable (for example, it
 found assignments but couldn't read any of their settings), a **DIAGNOSTIC WARNINGS**
-section appears right after this summary. It also notes, once per kind of item, when
-several items share a name (and so were paired by content). It is also included in saved reports.
+section appears right after this summary. Purely informational messages (for example,
+that several question banks share a name and were paired by content) appear instead as a
+short italic note at the top, so the warnings box is kept for things that need attention. It is also included in saved reports.
 
 ### Content section
 
@@ -283,6 +286,17 @@ almost certainly not touched, though a checksum is not a byte-for-byte compariso
 
 ---
 
+## Running the tests
+
+The project has a test suite that builds small example exports in code (no binary files)
+and checks how each kind of Canvas content is read and compared:
+```
+pip install pytest python-docx python-pptx beautifulsoup4 lxml
+python -m pytest
+```
+When a comparison gives a surprising result, the quickest way to make sure it stays fixed
+is to reproduce it as a test in `tests/` using the helpers in `tests/conftest.py`.
+
 ## Troubleshooting
 
 **"No module named 'bs4'"**
@@ -314,6 +328,9 @@ renamed items will appear as one removal and one addition rather than a modifica
 
 ## Known Limitations
 
+- **Text boxes and drawings inside a `.docx`**, and any text that is part of an image, are not
+  read, so a change there isn't seen.
+
 - **Module structure ignores dates in titles.** Module headings and item titles
   usually carry that semester's dates ("Week 1 Monday, August 24, 2026"), which would
   otherwise show as changed every term, so a month-and-day (with optional year) is
@@ -334,7 +351,7 @@ renamed items will appear as one removal and one addition rather than a modifica
   addition whenever the dates change. They can't be paired automatically: once the date
   is removed, many of them share the same title.
 - **Canvas renames re-imported files** by appending `-1`, `-2` and so on
-  (`handout.pdf` becomes `handout-1.pdf`). Files with identical content are paired as
+  (`handout.pdf` becomes `handout-1.pdf`). Files with the same size and checksum are paired as
   renamed. A file that was renamed *and* edited shows as one removal plus one addition,
   and link text that mentions the old file name still appears as a text difference.
 - **Comparing courses with different structures** (for example a 16-week and an

@@ -99,8 +99,10 @@ def _compare_files(old: dict, new: dict) -> dict:
     Compare two {name: (size, CRC32)} dicts. A file that disappeared under
     one name and appeared under another with the same size AND CRC-32 is
     reported as "renamed" (moved) rather than as one removal plus one
-    addition. That is exact content, so it can't pair up different files;
-    empty files are excluded since every empty file looks alike. It covers
+    addition. Matching on size AND CRC-32 makes a wrong pairing extremely
+    unlikely (about 1 in 4 billion per pair) though not impossible, so the
+    report says "same size and checksum", not "identical"; empty files are
+    excluded since every empty file looks alike. It covers
     the "-1" suffix Canvas adds to re-imported file names.
     """
     old_keys, new_keys = set(old), set(new)

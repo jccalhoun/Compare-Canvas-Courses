@@ -24,12 +24,16 @@ from .parse_assignment import extract_rubric_ref, extract_title, parse_xml_field
 from .parse_modules import parse_module_outline
 from .parse_quizzes import extract_quiz_questions, parse_bank
 from .parse_rubrics import parse_rubrics
-from .parse_office import HAVE_DOCX, HAVE_PPTX, extract_docx_text, extract_pptx_text
+from .parse_office import (HAVE_DOCX, HAVE_PPTX, extract_docx_text, extract_pptx_text,
+                           missing_optional_deps)
 
 MEDIA_EXTENSIONS = ('.mp4', '.mp3', '.wav', '.avi', '.mov', '.mkv', '.m4a', '.webm', '.flac', '.aac')
 DOCX_EXTENSIONS  = ('.docx',)
 PPTX_EXTENSIONS  = ('.pptx',)
 TEXT_EXTENSIONS  = ('.txt', '.csv', '.md', '.markdown')
+
+# Files Canvas writes for its own use, not course content.
+CANVAS_CONTROL_FILES = {"imsmanifest.xml", "course_settings/canvas_export.txt"}
 
 # Fixed locations Canvas uses for course-level content that isn't part of the
 # module item tree (so the manifest never links to them).
@@ -44,7 +48,8 @@ class LoadedCourse(NamedTuple):
     media_items: dict      # audio/video name -> (size, CRC32)
     other_files: dict      # other course files (PDFs, images, ...) name -> (size, CRC32)
     skipped_office: int    # .docx/.pptx skipped because the library isn't installed
-    warnings: list         # diagnostic messages, also shown in saved reports
+    warnings: list         # problems worth attention, shown in the report's warnings box
+    notices: list          # information only (e.g. copies paired by content), shown as a quiet note
 
 
 def _blank_entry() -> dict:
@@ -118,9 +123,14 @@ def _add_item(container: dict, key, value, collisions: list) -> None:
     container[key] = value
 
 
-def _report_collisions(warnings: list, label: str, collisions: list) -> None:
-    """One warning per kind, not one per collision: shared names are normal
-    (a course full of copied question banks has dozens)."""
+def _report_collisions(warnings: list, notices: list, label: str, collisions: list) -> None:
+    """
+    One message per kind, not one per collision: shared names are normal (a
+    course full of copied question banks has dozens). For items, the copies
+    are paired by content when comparing, so the message is only a notice.
+    Course files are paired by archive order instead, so a clash there could
+    mis-pair and stays a warning.
+    """
     by_kind = {}
     for kind, name in collisions:
         names = by_kind.setdefault(kind, [])
@@ -128,9 +138,14 @@ def _report_collisions(warnings: list, label: str, collisions: list) -> None:
             names.append(name)
     for kind, names in by_kind.items():
         shown = ", ".join(repr(n) for n in names[:4]) + (f" (+{len(names) - 4} more)" if len(names) > 4 else "")
-        tail = ("Copies are matched to the other course's by content when comparing."
-                if kind != "course file" else "Check both in Canvas if this looks wrong.")
-        _warn(warnings, f"{label}: {len(names)} {kind} name(s) are used by more than one {kind}, e.g. {shown}. {tail}")
+        if kind == "course file":
+            _warn(warnings, f"{label}: {len(names)} {kind} name(s) are used by more than one {kind}, "
+                            f"e.g. {shown}. Check both in Canvas if this looks wrong.")
+        else:
+            msg = (f"{label}: {len(names)} {kind} name(s) are used by more than one {kind}, e.g. {shown}. "
+                   f"Copies were matched to the other course's by content.")
+            notices.append(msg)
+            print(f"  Note: {msg}", file=sys.stderr)
 
 
 def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "",
@@ -175,6 +190,7 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "",
     other_files    = {}
     skipped_office = 0
     warnings       = []
+    notices        = []
     collisions     = []   # (kind, name) pairs, summarised at the end
 
     # Diagnostic counters — tallied from EVERY manifest item of the given
@@ -438,7 +454,7 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "",
         # export happened to store them in. Otherwise the same two files could
         # swap suffixes between two exports and diff as false changes.
         for filename, file_info in sorted(all_files.items()):
-            if file_info.is_dir() or filename in processed or filename == "imsmanifest.xml":
+            if file_info.is_dir() or filename in processed or filename in CANVAS_CONTROL_FILES:
                 continue
 
             name_lower = filename.lower()
@@ -511,5 +527,11 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "",
                 # "unchanged". The warning shows up in saved reports too.
                 _warn(warnings, f"{label}: could not read {filename} ({e}); it was not compared.")
 
-    _report_collisions(warnings, label, collisions)
-    return LoadedCourse(text_items, media_items, other_files, skipped_office, warnings)
+    _report_collisions(warnings, notices, label, collisions)
+    if skipped_office:
+        # Also printed once at the start by the command line, but a SAVED report
+        # must say so too, or it reads as a complete comparison.
+        warnings.append(f"{label}: {skipped_office} .docx/.pptx file(s) were not compared because "
+                        f"{' and '.join(missing_optional_deps())} "
+                        f"{'is' if len(missing_optional_deps()) == 1 else 'are'} not installed.")
+    return LoadedCourse(text_items, media_items, other_files, skipped_office, warnings, notices)

@@ -16,12 +16,22 @@ office = [
     "python-pptx",
 ]
 
+# Everything the test suite needs: pip install -e ".[test]"
+test = [
+    "pytest",
+    "python-docx",
+    "python-pptx",
+]
+
 [project.scripts]
 canvas-compare = "canvas_compare.cli:main"
 
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

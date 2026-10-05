@@ -161,7 +161,7 @@ def main():
     for name in sorted(options.ignore_fields - dropped):
         print(f"Notice: no field called '{name}' was found in either course, so --ignore {name} "
               f"had no effect. (Groups: {', '.join(IGNORE_GROUPS)}.)\n")
-    notes = options.describe(dropped)
+    notes = options.describe(dropped) + old.notices + new.notices
 
     print("Comparing...")
     report = compare_courses(old.text_items, old.media_items, new.text_items, new.media_items,

@@ -98,7 +98,7 @@ def format_html_report(report: dict, old_path: str, new_path: str, warnings: lis
     for t in m["removed"]:
         out.append(f"<tr><td>{esc(t)}</td><td><span class='badge b-removed'>Removed</span></td><td></td></tr>")
     for old_name, new_name in m.get("renamed", []):
-        out.append(f"<tr><td>{esc(old_name)} &rarr; {esc(new_name)}</td><td><span class='badge b-renamed'>Renamed</span></td><td>identical content</td></tr>")
+        out.append(f"<tr><td>{esc(old_name)} &rarr; {esc(new_name)}</td><td><span class='badge b-renamed'>Renamed</span></td><td>same size and checksum</td></tr>")
     for t, (old_sz, _old_crc), (new_sz, _new_crc) in m["changed"]:
         if old_sz != new_sz:
             detail = f"{old_sz:,} bytes &rarr; {new_sz:,} bytes"
@@ -115,7 +115,7 @@ def format_html_report(report: dict, old_path: str, new_path: str, warnings: lis
         for t in o["removed"]:
             out.append(f"<tr><td>{esc(t)}</td><td><span class='badge b-removed'>Removed</span></td><td></td></tr>")
         for old_name, new_name in o["renamed"]:
-            out.append(f"<tr><td>{esc(old_name)} &rarr; {esc(new_name)}</td><td><span class='badge b-renamed'>Renamed</span></td><td>identical content</td></tr>")
+            out.append(f"<tr><td>{esc(old_name)} &rarr; {esc(new_name)}</td><td><span class='badge b-renamed'>Renamed</span></td><td>same size and checksum</td></tr>")
         for t, (old_sz, _old_crc), (new_sz, _new_crc) in o["changed"]:
             if old_sz != new_sz:
                 detail = f"{old_sz:,} bytes &rarr; {new_sz:,} bytes"
