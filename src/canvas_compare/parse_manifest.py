@@ -96,9 +96,10 @@ def parse_manifest(z: zipfile.ZipFile) -> tuple[dict, dict]:
             # <dependency>, all 142 had the settings XML as a plain file
             # sibling instead). The dependency-based resolution below
             # still runs afterward for exports that DO use that pattern;
-            # this just also covers the one that doesn't.
-            for f in res.find_all("file"):
-                fhref = unquote(f.get("href", ""))
+            # this just also covers the one that doesn't. The resource's own
+            # href is checked first, in case the settings XML is declared
+            # only there with no <file> sibling.
+            for fhref in [href] + [unquote(f.get("href", "")) for f in res.find_all("file")]:
                 if fhref.lower().endswith(".xml"):
                     settings_path = fhref
                     break
@@ -204,6 +205,12 @@ def parse_manifest(z: zipfile.ZipFile) -> tuple[dict, dict]:
     for title, group in by_title.items():
         ordered = sorted(group, key=_content_sort_key) if len(group) > 1 else group
         for info in ordered:
+            if len(group) > 1:
+                # The "(2)" order above comes from file paths, and for
+                # assignments those contain ids that change with every
+                # export. Recording the shared title lets the comparison pair
+                # same-titled items by content instead (see diff.py).
+                info["dup_base"] = title
             # Guard against colliding with a genuinely, separately titled
             # item that happens to match the auto-generated pattern (an
             # instructor who titled something literally "Overview (2)" of

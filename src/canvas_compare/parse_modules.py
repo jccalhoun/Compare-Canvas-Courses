@@ -24,7 +24,8 @@ _MONTH = (r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|
 # "August 24", "Sept. 2nd", "October 11, 2022" — a month name followed by a
 # day number, with an optional year. A month name alone ("March Madness") is
 # left alone, since it isn't a date.
-_DATE_RE = re.compile(rf"[,\s]*\b{_MONTH}\.?\s+\d{{1,2}}(?:st|nd|rd|th)?(?:\s*,?\s*\d{{4}})?",
+# The (?!\d) stops "March 2026" being read as March 20 (which left "Unit 326").
+_DATE_RE = re.compile(rf"[,\s]*\b{_MONTH}\.?\s+\d{{1,2}}(?!\d)(?:st|nd|rd|th)?(?:\s*,?\s*\d{{4}})?",
                       re.IGNORECASE)
 
 _CONTENT_LABEL = {

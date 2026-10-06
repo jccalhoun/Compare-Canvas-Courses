@@ -155,3 +155,21 @@ def test_a_changed_link_to_a_course_file_is_detected(make_imscc, compare):
     report, *_ = compare(build("old", "chapter1.pdf"), build("new", "chapter2.pdf"))
     assert modified_titles(report) == ["Reading"]
     assert "chapter2.pdf" in report["modified"][0][1][0]["diff"]
+
+
+def test_strip_dates_never_eats_part_of_a_year():
+    from canvas_compare.parse_modules import strip_dates
+    assert strip_dates("Unit 3 March 2026") == "Unit 3 March 2026"          # no day number: not a date
+    assert strip_dates("Week 1 Monday, August 24, 2026") == "Week 1 Monday"
+    assert strip_dates("Due Sept. 2nd") == "Due"
+    assert strip_dates("October 11") == "October 11"                        # a title that is only a date is kept
+
+
+def test_settings_xml_declared_only_as_the_resource_href(make_imscc, compare):
+    """Settings XML given as the resource's href, with no <file> sibling, must still be read."""
+    res = [f'<resource identifier="a" type="{LAR}" href="gA/assignment_settings.xml"></resource>']
+    def build(name, points):
+        return make_imscc(name, {"imsmanifest.xml": manifest([("1", "a", "Essay")], res),
+                                 "gA/assignment_settings.xml": f"<assignment><title>Essay</title><points_possible>{points}</points_possible></assignment>"})
+    report, *_ = compare(build("old", 10), build("new", 20))
+    assert labels_for(report, "Essay") == ["Field: points_possible"]

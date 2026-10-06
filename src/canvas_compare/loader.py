@@ -343,6 +343,8 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "",
             )
             if has_known_path:
                 key = ("quiz", title) if info["type"] == "quiz" else ("item", title)
+                if info.get("dup_base"):
+                    entry["dup_group"] = (key[0], info["dup_base"])
                 _add_item(text_items, key, entry, collisions)
 
         if assignment_total and not assignment_with_fields:

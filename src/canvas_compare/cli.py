@@ -167,6 +167,7 @@ def main():
     report = compare_courses(old.text_items, old.media_items, new.text_items, new.media_items,
                              old_label, new_label,
                              old_other=old.other_files, new_other=new.other_files)
+    notes += report["notes"]
 
     # Colored version for the terminal; plain version for any saved file
     # (escape codes in a text file you open later are just noise).

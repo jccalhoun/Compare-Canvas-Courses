@@ -1,5 +1,5 @@
 """Pairing the same item across two courses when ids and titles can't be trusted."""
-from conftest import html, manifest, modified_titles, page_resource
+from conftest import LAR, html, manifest, modified_titles, page_resource
 
 
 def bank(title, questions):
@@ -154,3 +154,47 @@ def test_clashing_course_file_names_are_still_a_warning():
     _report_collisions(warnings, notices, "c", [("course file", "web_resources/a.png"), ("bank", "Twin")])
     assert len(warnings) == 1 and "web_resources/a.png" in warnings[0]
     assert len(notices) == 1 and "Twin" in notices[0]
+
+
+
+def two_essays(make_imscc, name, first_folder_content, second_folder_content):
+    """Two module items both titled 'Essay'; folder ids differ per export, so archive order can't be trusted."""
+    res = [f'<resource identifier="{rid}" type="{LAR}" href="{rid}/e.html"><file href="{rid}/e.html"/>'
+           f'<file href="{rid}/assignment_settings.xml"/></resource>' for rid in ("gAAA", "gZZZ")]
+    files = {"imsmanifest.xml": manifest([("1", "gAAA", "Essay"), ("2", "gZZZ", "Essay")], res)}
+    for rid, (body, pts) in (("gAAA", first_folder_content), ("gZZZ", second_folder_content)):
+        files[f"{rid}/e.html"] = html(body)
+        files[f"{rid}/assignment_settings.xml"] = f"<assignment><title>Essay</title><points_possible>{pts}</points_possible></assignment>"
+    return make_imscc(name, files)
+
+
+def test_same_titled_module_items_pair_by_content(make_imscc, compare):
+    persuasive, informative = ("Write a persuasive essay.", 50), ("Write an informative essay.", 30)
+    old = two_essays(make_imscc, "old", persuasive, informative)
+    new = two_essays(make_imscc, "new", informative, persuasive)       # same two essays, folder ids swapped
+    report, *_ = compare(old, new)
+    assert modified_titles(report) == [] and report["added"] == [] and report["removed"] == []
+
+
+def test_three_same_named_banks_in_a_shuffled_order(make_imscc, compare):
+    C = [("C-1", "Gamma question")]
+    old = banks_course(make_imscc, "old", [("g1", "Pool", A), ("g2", "Pool", B), ("g3", "Pool", C)])
+    new = banks_course(make_imscc, "new", [("g1", "Pool", C), ("g2", "Pool", A_EDITED), ("g3", "Pool", B)])
+    report, *_ = compare(old, new, quizzes=True)
+    assert report["added"] == [] and report["removed"] == []
+    assert len(report["modified"]) == 1                                    # only the edited copy
+    diff = report["modified"][0][1][0]["diff"]
+    assert "+Alpha question TWO, edited" in diff and "Beta" not in diff and "Gamma" not in diff
+
+
+def test_title_style_matches_are_named_in_a_report_note(make_imscc, compare):
+    old = pages(make_imscc, "old", [("Week 2 End", "Wrap up.")])
+    new = pages(make_imscc, "new", [("Week 2 - End", "Wrap up.")])
+    report, *_ = compare(old, new)
+    assert report["notes"] == ["1 item(s) were matched although their titles differ in capitalization, "
+                               "punctuation or spacing: 'Week 2 End' → 'Week 2 - End'."]
+
+
+def test_no_note_when_nothing_was_matched_by_title_style(make_imscc, compare):
+    path = pages(make_imscc, "one", [("Week 2 End", "x")])
+    assert compare(path, path)[0]["notes"] == []

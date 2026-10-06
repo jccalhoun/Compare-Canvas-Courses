@@ -260,7 +260,9 @@ of the same kind and name get a `(2)` suffix.
 **Titles that differ only in style.** An item is treated as the same one if its title
 differs only in capitalization, punctuation or spacing ("Week 2 End" and "Week 2 - End"),
 as long as exactly one item on each side has that spelling. The letters and digits must
-be identical, so "Week 2 End" and "Week 3 End" are never paired.
+be identical, so "Week 2 End" and "Week 3 End" are never paired. The note at the top of
+the report lists every pair matched this way, since the report itself shows only the
+new title.
 
 **Items that share a name.** Copies are common, especially question banks: your course
 may well have several banks with the same title. When either course has more than one
@@ -360,9 +362,7 @@ renamed items will appear as one removal and one addition rather than a modifica
   8-week section) produces many genuine additions and removals, and a large module
   outline diff. That is expected, not a fault.
 
-- **Matching items with identical titles** (for example two pages both called
-  "Overview") across two separate exports is best-effort. Canvas regenerates its
-  internal IDs on every export, so duplicates are matched by their file path
-  instead. If a duplicate's content moves to a different path between the two
-  exports, it may be matched to the wrong sibling or reported as added/removed
-  instead of modified.
+- **Matching items with identical titles** (for example two assignments both called
+  "Essay") is done by content, since Canvas regenerates its internal IDs on every
+  export: identical copies pair first, then the most similar. If two same-titled items
+  were both heavily rewritten, the pairing between them is a best guess.

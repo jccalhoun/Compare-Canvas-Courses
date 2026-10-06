@@ -220,7 +220,7 @@ def _plain(name: str) -> str:
     return re.sub(r"[\W_]+", "", name.lower())
 
 
-def _align_renamed(old_text: dict, new_text: dict) -> tuple[dict, dict]:
+def _align_renamed(old_text: dict, new_text: dict) -> tuple[dict, dict, list]:
     """
     Treat titles that differ only in capitalization, punctuation or spacing
     ("Week 2 End" / "Week 2 - End") as the same item, which they almost
@@ -239,15 +239,22 @@ def _align_renamed(old_text: dict, new_text: dict) -> tuple[dict, dict]:
     renames = {g["old"][0]: g["new"][0] for g in groups.values()
                if len(g["old"]) == 1 and len(g["new"]) == 1}
     if not renames:
-        return old_text, new_text
-    return {renames.get(k, k): v for k, v in old_text.items()}, new_text
+        return old_text, new_text, []
+    return {renames.get(k, k): v for k, v in old_text.items()}, new_text, sorted(renames.items())
 
 
 def compare_courses(old_text, old_media, new_text, new_media,
                      old_label: str = "Old", new_label: str = "New",
                      *, old_other=None, new_other=None) -> dict:
     old_text, new_text = _align_duplicates(old_text, new_text)
-    old_text, new_text = _align_renamed(old_text, new_text)
+    old_text, new_text, renamed_titles = _align_renamed(old_text, new_text)
+    notes = []
+    if renamed_titles:
+        # Make the pairing auditable: the report shows only the new title.
+        shown = ", ".join(f"'{o[1]}' → '{n[1]}'" for o, n in renamed_titles[:3])
+        more = f" (+{len(renamed_titles) - 3} more)" if len(renamed_titles) > 3 else ""
+        notes.append(f"{len(renamed_titles)} item(s) were matched although their titles differ in "
+                     f"capitalization, punctuation or spacing: {shown}{more}.")
     old_keys = set(old_text)
     new_keys = set(new_text)
     label    = build_display_names(old_keys | new_keys)
@@ -337,4 +344,5 @@ def compare_courses(old_text, old_media, new_text, new_media,
         "unchanged": unchanged,
         "media":    media_report,
         "other":    other_report,
+        "notes":    notes,
     }

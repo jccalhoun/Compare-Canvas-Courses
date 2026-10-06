@@ -88,7 +88,7 @@ def test_skip_rubrics_also_drops_the_rubric_field(make_imscc, compare):
     assert modified_titles(report) == [] and not any(k[0] == "rubric" for k in loaded.text_items)   # ...unless skipped
 
 
-def test_skip_files_media_and_documents(make_imscc, compare):
+def test_skip_files_and_media(make_imscc, compare):
     files = {"imsmanifest.xml": manifest(), "web_resources/a.pdf": b"%PDF one", "web_resources/v.mp4": b"VIDEO",
              "web_resources/n.txt": "kept"}
     path = make_imscc("one", files)
@@ -103,3 +103,22 @@ def test_describe_lists_what_was_left_out():
     opts = CompareOptions(ignore_groups=frozenset({"published"}), skip=frozenset({"media"}))
     lines = opts.describe({"workflow_state", "available"})
     assert "fields: available, workflow_state" in lines[0] and lines[1] == "Skipped entirely: media"
+
+
+def test_skip_documents(make_imscc, compare):
+    import pytest
+    docx = pytest.importorskip("docx")
+    import io
+    d = docx.Document(); d.add_paragraph("handout"); buf = io.BytesIO(); d.save(buf)
+    path = make_imscc("one", {"imsmanifest.xml": manifest(), "web_resources/h.docx": buf.getvalue()})
+    assert ("document", "web_resources/h.docx") in compare(path, path)[1].text_items
+    _, loaded, _ = compare(path, path, skip=["documents"])
+    assert loaded.text_items == {} and loaded.skipped_office == 0         # skipped by choice, not "missing library"
+
+
+def test_skip_banks_even_when_quizzes_are_compared(make_imscc, compare):
+    from test_matching import bank
+    path = make_imscc("one", {"imsmanifest.xml": manifest(),
+                              "non_cc_assessments/g1.xml.qti": bank("Pool", [("Q-1", "A question")])})
+    assert ("bank", "Pool") in compare(path, path, quizzes=True)[1].text_items
+    assert compare(path, path, quizzes=True, skip=["banks"])[1].text_items == {}
