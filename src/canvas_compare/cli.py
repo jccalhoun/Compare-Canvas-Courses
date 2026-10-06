@@ -7,21 +7,21 @@ removed, or modified — ignoring due date changes. Also flags media files
 (audio/video) whose file sizes differ between courses.
 
 Usage:
-    python compare_canvas_courses.py last_summer.imscc this_summer.imscc
+    python compare_canvas_courses.py old_course.imscc new_course.imscc
 
 Save a plain text report to file:
-    python compare_canvas_courses.py last_summer.imscc this_summer.imscc --output report.txt
+    python compare_canvas_courses.py old_course.imscc new_course.imscc --output report.txt
 
 Save an HTML report with side-by-side diffs:
-    python compare_canvas_courses.py last_summer.imscc this_summer.imscc --html report.html
+    python compare_canvas_courses.py old_course.imscc new_course.imscc --html report.html
 
 Also compare Classic Quiz questions (off by default — slower on courses
 with many quizzes/question banks):
-    python compare_canvas_courses.py last_summer.imscc this_summer.imscc --quizzes
+    python compare_canvas_courses.py old_course.imscc new_course.imscc --quizzes
 
 Leave settings out of the comparison, or whole sections out:
-    python compare_canvas_courses.py last_summer.imscc this_summer.imscc --ignore lockdown,published
-    python compare_canvas_courses.py last_summer.imscc this_summer.imscc --skip files,media
+    python compare_canvas_courses.py old_course.imscc new_course.imscc --ignore lockdown,published
+    python compare_canvas_courses.py old_course.imscc new_course.imscc --skip files,media
     python compare_canvas_courses.py --list-options        # everything these accept
 
 Requirements:
@@ -60,6 +60,7 @@ from .options import (IGNORE_GROUPS, SECTIONS, CompareOptions, apply_ignored_fie
 from .parse_manifest import MissingManifestError
 from .parse_office import missing_optional_deps
 from .report_html import format_html_report
+from .report_json import format_json_report
 from .report_text import format_report
 from .utils import short_label
 
@@ -68,14 +69,16 @@ def main():
     parser = argparse.ArgumentParser(
         description="Compare two Canvas .imscc course exports."
     )
-    parser.add_argument("last_summer", nargs="?", help="Path to last summer's .imscc file")
-    parser.add_argument("this_summer", nargs="?", help="Path to this summer's .imscc file")
+    parser.add_argument("old_course", nargs="?", help="Path to the older course's .imscc export")
+    parser.add_argument("new_course", nargs="?", help="Path to the newer course's .imscc export")
     parser.add_argument("--output", "-o",
                         help="Save a plain text report to this file path (optional)",
                         default=None)
     parser.add_argument("--html",
                         help="Save an HTML report with side-by-side diffs to this file path (optional)",
                         default=None)
+    parser.add_argument("--json", metavar="PATH", default=None,
+                        help="Save a machine-readable JSON report to this file path (optional)")
     parser.add_argument("--quizzes", action="store_true",
                         help="Also compare Classic Quiz questions and question banks "
                              "(off by default — slower on courses with many quizzes/questions)")
@@ -98,7 +101,7 @@ def main():
         print("    ...or the name of any field shown as 'Field: name' in a report, "
               "e.g. --ignore points_possible,submission_types")
         return
-    if not (args.last_summer and args.this_summer):
+    if not (args.old_course and args.new_course):
         parser.error("two .imscc files are required (the old course, then the new one)")
 
     skip = set(parse_names(args.skip))
@@ -139,17 +142,17 @@ def main():
                   f"is this a Canvas course export?", file=sys.stderr)
             sys.exit(1)
 
-    old_label = short_label(args.last_summer)
-    new_label = short_label(args.this_summer)
+    old_label = short_label(args.old_course)
+    new_label = short_label(args.new_course)
 
-    print(f"Loading {old_label} : {args.last_summer}")
-    old = _load(args.last_summer, old_label)
+    print(f"Loading {old_label} : {args.old_course}")
+    old = _load(args.old_course, old_label)
     print(f"  {len(old.text_items)} content items, {len(old.media_items)} media files"
           + (f", {len(old.other_files)} other files" if old.other_files else "")
           + (f", {old.skipped_office} docx/pptx skipped" if old.skipped_office else ""))
 
-    print(f"Loading {new_label} : {args.this_summer}")
-    new = _load(args.this_summer, new_label)
+    print(f"Loading {new_label} : {args.new_course}")
+    new = _load(args.new_course, new_label)
     print(f"  {len(new.text_items)} content items, {len(new.media_items)} media files"
           + (f", {len(new.other_files)} other files" if new.other_files else "")
           + (f", {new.skipped_office} docx/pptx skipped" if new.skipped_office else "") + "\n")
@@ -171,17 +174,23 @@ def main():
 
     # Colored version for the terminal; plain version for any saved file
     # (escape codes in a text file you open later are just noise).
-    print("\n" + format_report(report, args.last_summer, args.this_summer, use_colors=True, warnings=all_warnings, notes=notes))
+    print("\n" + format_report(report, args.old_course, args.new_course, use_colors=True, warnings=all_warnings, notes=notes))
 
     if args.output:
         with open(args.output, "w", encoding="utf-8") as f:
-            f.write(format_report(report, args.last_summer, args.this_summer, use_colors=False, warnings=all_warnings, notes=notes))
+            f.write(format_report(report, args.old_course, args.new_course, use_colors=False, warnings=all_warnings, notes=notes))
         print(f"Text report saved to: {args.output}")
 
     if args.html:
         with open(args.html, "w", encoding="utf-8") as f:
-            f.write(format_html_report(report, args.last_summer, args.this_summer, warnings=all_warnings, notes=notes))
+            f.write(format_html_report(report, args.old_course, args.new_course, warnings=all_warnings, notes=notes))
         print(f"HTML report saved to: {args.html}")
+
+    if args.json:
+        with open(args.json, "w", encoding="utf-8") as f:
+            f.write(format_json_report(report, args.old_course, args.new_course,
+                                       options=options, warnings=all_warnings, notes=notes))
+        print(f"JSON report saved to: {args.json}")
 
 
 if __name__ == "__main__":

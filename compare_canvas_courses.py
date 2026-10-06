@@ -10,7 +10,7 @@ actually installed (pip install .), use the `canvas-compare` console
 script instead (see pyproject.toml) and this shim isn't needed at all.
 
 Usage:
-    python compare_canvas_courses.py last_summer.imscc this_summer.imscc
+    python compare_canvas_courses.py old_course.imscc new_course.imscc
 
 See src/canvas_compare/cli.py for full usage, or run with --help.
 """

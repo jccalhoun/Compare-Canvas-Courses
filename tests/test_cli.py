@@ -77,3 +77,41 @@ def test_warnings_reach_the_saved_report(make_imscc, run_cli, tmp_path):
     run_cli(make_imscc("old", files), make_imscc("new", files), "--output", str(tmp_path / "r.txt"))
     text = (tmp_path / "r.txt").read_text(encoding="utf-8")
     assert "DIAGNOSTIC WARNINGS" in text and "could not read web_resources/bad.docx" in text
+
+
+def test_json_report_is_complete_and_consistent(make_imscc, run_cli, tmp_path):
+    import json
+    from conftest import page_resource
+    res = [page_resource("p", "wiki_content/r.html")]
+    def build(name, body, pdf):
+        return make_imscc(name, {"imsmanifest.xml": manifest([("1", "p", "Rules")], res),
+                                 "wiki_content/r.html": html(body), "web_resources/a.pdf": pdf})
+    out = tmp_path / "r.json"
+    _, _, code = run_cli(build("old", "Old rules.", b"%PDF old"), build("new", "New rules.", b"%PDF newer"),
+                         "--ignore", "published", "--json", str(out))
+    d = json.loads(out.read_text(encoding="utf-8"))
+    assert code == 0 and d["schema_version"] == 1
+    assert d["summary"]["content"]["modified"] == len(d["content"]["modified"]) == 1
+    item = d["content"]["modified"][0]
+    assert (item["kind"], item["name"]) == ("item", "Rules") and item["changes"][0]["kind"] == "text"
+    changed = d["other_files"]["changed"][0]
+    assert changed["name"] == "web_resources/a.pdf" and len(changed["old_crc32"]) == 8 and changed["old_size"] < changed["new_size"]
+    assert d["settings"]["ignored_groups"] == ["published"]
+    assert any(n.startswith("Not compared") for n in d["notes"])
+
+
+def test_json_splits_display_titles_into_kind_and_name():
+    from canvas_compare.report_json import _split_title
+    assert _split_title("[Quiz] Midterm") == {"title": "[Quiz] Midterm", "kind": "quiz", "name": "Midterm"}
+    assert _split_title("[Bank] Pool (2)")["kind"] == "bank"
+    assert _split_title("[Presentation] web_resources/s.pptx")["kind"] == "presentation"
+    assert _split_title("Essay") == {"title": "Essay", "kind": "item", "name": "Essay"}
+
+
+def test_json_names_the_field_of_a_setting_change():
+    from canvas_compare.report_json import build_json_report
+    report = {"added": [], "removed": [], "unchanged": [], "notes": [],
+              "modified": [("Essay", [{"label": "Field: points_possible", "kind": "field", "old": "10", "new": "15", "diff": ""}])],
+              "media": {"added": [], "removed": [], "renamed": [], "changed": [], "unchanged": []}}
+    change = build_json_report(report, "a.imscc", "b.imscc")["content"]["modified"][0]["changes"][0]
+    assert change["field"] == "points_possible" and (change["old"], change["new"]) == ("10", "15")

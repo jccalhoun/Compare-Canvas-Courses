@@ -27,6 +27,8 @@ SECTIONS = {
     "files":     "other course files (PDFs, images, ...)",
     "media":     "audio and video files",
     "documents": "Word and PowerPoint files",
+    "groups":    "assignment groups (order, weights, drop rules) and each assignment's group",
+    "settings":  "course settings and the late policy",
 }
 
 # Settings that can be left out: name -> (description, exact field names,

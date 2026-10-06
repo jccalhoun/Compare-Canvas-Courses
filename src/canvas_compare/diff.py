@@ -34,17 +34,17 @@ _KIND_PREFIX = {
     "item": "", "quiz": "[Quiz] ", "document": "[Document] ",
     "presentation": "[Presentation] ", "page": "[Page] ", "file": "[File] ",
     "syllabus": "[Syllabus] ", "modules": "[Modules] ", "rubric": "[Rubric] ",
-    "bank": "[Bank] ",
+    "bank": "[Bank] ", "groups": "[Grading] ", "settings": "[Settings] ",
 }
 # Priority when two different keys would print identically: the first keeps
 # the plain label, later ones get a short marker so they can be told apart.
 _KIND_ORDER = ["item", "quiz", "document", "presentation", "page", "file",
-               "syllabus", "modules", "rubric", "bank"]
+               "syllabus", "modules", "rubric", "bank", "groups", "settings"]
 _KIND_MARKER = {
     "quiz": "quiz", "document": "attached file", "presentation": "attached file",
     "page": "unlinked page", "file": "attached file",
     "syllabus": "syllabus", "modules": "module structure", "rubric": "rubric",
-    "bank": "question bank",
+    "bank": "question bank", "groups": "assignment groups", "settings": "settings",
 }
 
 

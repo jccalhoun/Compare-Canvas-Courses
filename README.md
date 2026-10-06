@@ -17,6 +17,8 @@ Due dates and other system timestamps are always ignored.
 | Course syllabus | Syllabus body text |
 | Module structure | Module order, the items in each module and their order, published state, prerequisites, and completion requirements (see below) |
 | Question banks (with `--quizzes`) | Every question in each bank: text, answer choices (correct ones marked), type and points. Banks are matched by title, and each question is labeled by its own name rather than a position number. |
+| Assignment groups | The groups in order, their weights (when weighted grading is used) and drop rules; each assignment also shows which group it belongs to |
+| Course settings and late policy | Every setting in the export's course settings and late policy (weighting scheme, default view, student permissions, late and missing penalties, ...), except identity, dates, ids and the navigation menu |
 | Rubrics | Every rubric in the course: criteria, rating levels, and points. An assignment or graded discussion also shows which rubric it uses. |
 | Classic Quizzes | Quiz-level metadata (e.g. points possible) always; question text, question type, points, and answer choices (correct answers marked) with `--quizzes` |
 | Word documents (`.docx`) | Paragraphs, table cells, and headers/footers |
@@ -78,9 +80,12 @@ and a file moved between folders. Empty files are never paired this way.
   Cartridge export format at all. With `--quizzes`, those quizzes are flagged with a
   "No questions found in this export" note rather than compared, and the note at the top
   of the report names them, so "unchanged" is never mistaken for "checked".
-- **Grade weights / assignment groups** — course grading structure is not examined
-- **Course settings** — enrollment dates, grading schemes, and other course-level
-  settings are not compared
+- **Course identity, dates and navigation** — the course title, course code, start and end
+  dates, and the course navigation menu are left out of the course-settings comparison
+  (the first three differ between any two sections by design; the menu is stored with ids
+  that change on every export)
+- **Grading scheme details** — whether a grading scheme is enabled is compared, but the
+  letter-grade cutoffs themselves are not
 - **Which image a page uses** — a replaced image file is reported as a changed course
   file, but a page that now points at a different image isn't flagged by its text
 - **External URLs** — links to outside resources are not followed or validated, and a
@@ -133,33 +138,50 @@ like. Open a terminal in the folder containing the script.
 
 ### Print the report to the terminal
 ```
-python compare_canvas_courses.py last_summer.imscc this_summer.imscc
+python compare_canvas_courses.py old_course.imscc new_course.imscc
 ```
 
 ### Save the report to a text file
 ```
-python compare_canvas_courses.py last_summer.imscc this_summer.imscc --output report.txt
+python compare_canvas_courses.py old_course.imscc new_course.imscc --output report.txt
 ```
 (`-o report.txt` also works.)
 
 ### Save an HTML report with side-by-side diffs
 ```
-python compare_canvas_courses.py last_summer.imscc this_summer.imscc --html report.html
+python compare_canvas_courses.py old_course.imscc new_course.imscc --html report.html
 ```
 Open the file in a browser. Modified items get a side-by-side, color-highlighted diff;
 the overview tables at the top link to each one.
 
 ### Also compare Classic Quiz questions and question banks
 ```
-python compare_canvas_courses.py last_summer.imscc this_summer.imscc --quizzes
+python compare_canvas_courses.py old_course.imscc new_course.imscc --quizzes
 ```
 Off by default because it is slower: reading about 7,000 bank questions (roughly 20 MB
 of data) takes around 10 seconds per course. Combine with
 `--output` and/or `--html` as needed.
 
-The file names can be anything — they do not have to be called `last_summer.imscc`
-and `this_summer.imscc`. The first argument is always treated as the *old* course
+The file names can be anything — they do not have to be called `old_course.imscc`
+and `new_course.imscc`. The first argument is always treated as the *old* course
 and the second as the *new* course.
+
+### Save a JSON report (for scripts)
+```
+python compare_canvas_courses.py old_course.imscc new_course.imscc --json report.json
+```
+The same comparison in a machine-readable form, for use by other programs. It can be
+combined with `--output` and `--html`. The top-level keys are:
+
+| Key | Contents |
+|---|---|
+| `schema_version` | Layout version (currently `1`); changes only if a key is renamed or removed |
+| `old_course`, `new_course` | `path` and `name` of each export |
+| `settings` | Options the run used: quiz questions, question banks, skipped sections, ignored groups and fields |
+| `summary` | Counts for `content`, `media` and `other_files` |
+| `warnings`, `notes` | The same messages as at the top of the other reports |
+| `content` | `added`, `removed`, `unchanged` and `modified` items. Each has `title` (as shown in the report), `kind` (`item`, `quiz`, `bank`, `rubric`, `page`, `document`, ...) and `name`. Modified items also have `changes`: each with `label`, `field` (the setting's name, or `null` for text), `kind` (`text` or `field`), `old`, `new` and a unified `diff` |
+| `media`, `other_files` | `added`, `removed`, `unchanged` (names); `renamed` (`old`, `new`); `changed` (`name`, `old_size`, `new_size`, `old_crc32`, `new_crc32`) |
 
 ### Choose what to compare
 
@@ -167,7 +189,7 @@ Two options let you leave things out. Run `--list-options` to see everything the
 
 **`--ignore`** keeps reading an item but leaves a setting out of the comparison:
 ```
-python compare_canvas_courses.py last_summer.imscc this_summer.imscc --ignore lockdown,published
+python compare_canvas_courses.py old_course.imscc new_course.imscc --ignore lockdown,published
 ```
 - `lockdown` — lockdown browser settings (any field with "lockdown" in its name)
 - `published` — published / unpublished state: the `workflow_state` and `available`
@@ -180,7 +202,7 @@ name a field that appears in neither course (a typo, say), the tool tells you.
 
 **`--skip`** leaves out whole sections, and doesn't read them, which also saves time:
 ```
-python compare_canvas_courses.py last_summer.imscc this_summer.imscc --skip files,media
+python compare_canvas_courses.py old_course.imscc new_course.imscc --skip files,media
 ```
 `rubrics`, `modules`, `syllabus`, `banks`, `files` (PDFs, images, ...), `media`
 (audio/video) and `documents` (Word and PowerPoint). Skipping `rubrics` also drops the
@@ -193,7 +215,7 @@ a report never silently looks more complete than it is.
 ### Optional: install as a command
 ```
 pip install .
-canvas-compare last_summer.imscc this_summer.imscc
+canvas-compare old_course.imscc new_course.imscc
 ```
 Add the optional office libraries with `pip install ".[office]"`.
 
@@ -217,9 +239,9 @@ is kept for things that need attention.
 
 ### Content section
 
-**ADDED TO THIS SUMMER** — items that exist in the new course but not the old one.
+**ADDED (new course only)** — items that exist in the new course but not the old one.
 
-**REMOVED FROM THIS SUMMER** — items that exist in the old course but not the new one.
+**REMOVED (old course only)** — items that exist in the old course but not the new one.
 
 **MODIFIED** — items present in both courses whose content changed. Each entry
 shows what specifically changed. The two file names in the diff header are your two
@@ -228,20 +250,20 @@ shows what specifically changed. The two file names in the diff header are your 
 ```
   ▸ Overview
     [Instructions / Content]
-      --- last_summer.imscc
-      +++ this_summer.imscc
+      --- old_course.imscc
+      +++ new_course.imscc
       @@ -1 +1 @@
       -Welcome to the course.
       +Welcome to the updated course! Extra info here.
 
   ▸ Essay 1
     [Field: points_possible]
-        last_summer.imscc : 100
-        this_summer.imscc : 90
+        old_course.imscc : 100
+        new_course.imscc : 90
 ```
 
-Lines starting with `-` were in last summer's version only.
-Lines starting with `+` are in this summer's version only.
+Lines starting with `-` are in the old course's version only.
+Lines starting with `+` are in the new course's version only.
 Lines with no prefix are unchanged.
 
 **UNCHANGED** — items present in both courses with identical content (excluding
@@ -346,6 +368,9 @@ renamed items will appear as one removal and one addition rather than a modifica
   `Chapter11-02`), so adding or removing a question shows only that question rather than
   renumbering the rest. A bank's `bank_context_uuid` is ignored: it identifies the course,
   so it differs between any two.
+- **Drop rules** ("drop lowest 1", "never drop: Final Quiz") follow Canvas's published
+  export format; they were tested against constructed examples, not a real export that
+  uses them.
 - **Rubrics are matched by title**, so a renamed rubric appears as one removal and one
   addition. Every rubric in the course is compared, including ones no assignment uses,
   so the UNCHANGED list gets longer. The rubric's `read_only` flag is ignored: it

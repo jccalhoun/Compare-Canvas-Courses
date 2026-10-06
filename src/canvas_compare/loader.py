@@ -20,7 +20,9 @@ from bs4 import BeautifulSoup
 from .parse_manifest import parse_manifest
 from .parse_html import clean_html, extract_page_meta
 from .options import CompareOptions
-from .parse_assignment import extract_rubric_ref, extract_title, parse_xml_fields
+from .parse_assignment import extract_title, parse_xml_fields
+from .parse_course_settings import (assignment_groups_outline, parse_assignment_groups,
+                                    parse_settings_file)
 from .parse_modules import parse_module_outline
 from .parse_quizzes import extract_quiz_questions, parse_bank
 from .parse_rubrics import parse_rubrics
@@ -40,6 +42,9 @@ CANVAS_CONTROL_FILES = {"imsmanifest.xml", "course_settings/canvas_export.txt"}
 RUBRICS_PATH  = "course_settings/rubrics.xml"
 MODULES_PATH  = "course_settings/module_meta.xml"
 SYLLABUS_PATH = "course_settings/syllabus.html"
+GROUPS_PATH = "course_settings/assignment_groups.xml"
+COURSE_SETTINGS_PATH = "course_settings/course_settings.xml"
+LATE_POLICY_PATH = "course_settings/late_policy.xml"
 
 
 class LoadedCourse(NamedTuple):
@@ -56,17 +61,27 @@ def _blank_entry() -> dict:
     return {"instructions": "", "fields": {}, "discussion_text": ""}
 
 
-def _settings_fields(raw: str, rubric_titles: dict, include_rubric: bool = True) -> dict:
+def _settings_fields(raw: str, lookups: dict) -> dict:
     """
     Fields from an assignment_settings.xml (or graded-discussion metadata)
-    file, plus a `rubric` field naming the rubric it points at. The pointer
-    itself is an identifier that differs between exports, so it is resolved
-    to the rubric's title.
+    file, plus `rubric` and `assignment_group` fields naming what it points at.
+    The pointers themselves are identifiers that differ between exports, so
+    they are resolved to titles. A lookup of None means that section is being
+    skipped, so its field is left out. Also records this assignment's own
+    identifier -> title in lookups["assignments"], so a drop rule that names
+    an assignment can be shown by title.
     """
     fields = parse_xml_fields(raw)
-    ref = extract_rubric_ref(raw) if include_rubric else None
-    if ref:
-        fields["rubric"] = rubric_titles.get(ref, "[rubric not found in this export]")
+    soup = BeautifulSoup(raw, "xml")
+    for field, tag in (("rubric", "rubric_identifierref"), ("assignment_group", "assignment_group_identifierref")):
+        titles = lookups[field]
+        ref = soup.find(tag) if titles is not None else None
+        if ref is not None and ref.text.strip():
+            fields[field] = titles.get(ref.text.strip(), f"[{field.replace('_', ' ')} not found in this export]")
+    assignment = soup.find("assignment")          # the root, or nested in a graded discussion's metadata
+    if assignment is not None and assignment.get("identifier"):
+        own_title = assignment.find("title", recursive=False)
+        lookups["assignments"][assignment["identifier"]] = own_title.text.strip() if own_title is not None else ""
     return fields
 
 
@@ -208,6 +223,20 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "",
         manifest_items, href_index = parse_manifest(z)
         processed      = set()
 
+        # ── Assignment groups ────────────────────────────────────────────────
+        # Read before the manifest items, because each assignment only holds
+        # a pointer to its group; the outline itself is built further down,
+        # once every assignment's title is known (a drop rule can name one).
+        groups, group_titles = [], None
+        if GROUPS_PATH in all_files:
+            processed.add(GROUPS_PATH)
+            if options.wants("groups"):
+                try:
+                    groups = parse_assignment_groups(z.read(GROUPS_PATH).decode("utf-8-sig", errors="replace"))
+                    group_titles = {g["identifier"]: g["title"] for g in groups}
+                except Exception as e:
+                    _warn(warnings, f"{label}: could not read {GROUPS_PATH} ({e}); assignment groups were not compared.")
+
         # ── Rubrics ──────────────────────────────────────────────────────────
         # Loaded before the manifest items because an assignment only holds a
         # pointer to its rubric; this maps pointer -> title. Each rubric is
@@ -231,6 +260,13 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "",
             except Exception as e:
                 _warn(warnings, f"{label}: could not read {RUBRICS_PATH} ({e}); rubrics were not compared.")
 
+        # Pointer -> title lookups for assignment settings (None = section skipped).
+        lookups = {
+            "rubric": rubric_titles if options.wants("rubrics") else None,
+            "assignment_group": group_titles,
+            "assignments": {},                    # filled in as assignments are read
+        }
+
         # ── Manifest-linked items (assignments, discussions, pages, quizzes) ─
         for title, info in manifest_items.items():
             entry = _blank_entry()
@@ -247,7 +283,7 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "",
 
             if info.get("settings_path") and info["settings_path"] in all_files:
                 raw = z.read(info["settings_path"]).decode("utf-8-sig", errors="replace")
-                entry["fields"] = _settings_fields(raw, rubric_titles, options.wants("rubrics"))
+                entry["fields"] = _settings_fields(raw, lookups)
                 processed.add(info["settings_path"])
 
             # Discussion XML — try declared path, then href fallback
@@ -449,7 +485,7 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "",
                 settings = z.read(filename).decode("utf-8-sig", errors="replace")
                 title = extract_title(settings) or folder.rstrip("/").rsplit("/", 1)[-1]
                 entry = _blank_entry()
-                entry["fields"] = _settings_fields(settings, rubric_titles, options.wants("rubrics"))
+                entry["fields"] = _settings_fields(settings, lookups)
                 processed.add(filename)
                 pages = sorted(f for f in all_files
                                if f.startswith(folder) and "/" not in f[len(folder):]
@@ -461,6 +497,24 @@ def load_course(imscc_path: str, parse_quizzes: bool = False, label: str = "",
                 _add_item(text_items, ("item", title), entry, collisions)
             except Exception as e:
                 _warn(warnings, f"{label}: could not read {filename} ({e}); that assignment was not compared.")
+
+        # ── Assignment groups outline, course settings, late policy ─────────
+        if groups:
+            entry = _blank_entry()
+            entry["instructions"] = assignment_groups_outline(groups, lookups["assignments"])
+            _add_item(text_items, ("groups", "Assignment groups"), entry, collisions)
+        for path, name in ((COURSE_SETTINGS_PATH, "Course settings"), (LATE_POLICY_PATH, "Late policy")):
+            if path not in all_files:
+                continue
+            processed.add(path)
+            if not options.wants("settings"):
+                continue
+            try:
+                entry = _blank_entry()
+                entry["fields"] = parse_settings_file(z.read(path).decode("utf-8-sig", errors="replace"))
+                _add_item(text_items, ("settings", name), entry, collisions)
+            except Exception as e:
+                _warn(warnings, f"{label}: could not read {path} ({e}); {name.lower()} was not compared.")
 
         # ── Unlinked / attached files (docx, pptx, media, plain text, orphan pages) ─
         # Sorted by archive path so that when two files resolve to the same

@@ -76,11 +76,11 @@ def format_report(report: dict, old_path: str, new_path: str, use_colors: bool =
             lines.append("  (none)")
         lines.append("")
 
-    section(f"ADDED TO THIS SUMMER ({n_add})", C_ADD,
+    section(f"ADDED (new course only) ({n_add})", C_ADD,
             report["added"],
             lambda t: f"{C_ADD}  + {t}{C_RST}")
 
-    section(f"REMOVED FROM THIS SUMMER ({n_rem})", C_REM,
+    section(f"REMOVED (old course only) ({n_rem})", C_REM,
             report["removed"],
             lambda t: f"{C_REM}  - {t}{C_RST}")
 
