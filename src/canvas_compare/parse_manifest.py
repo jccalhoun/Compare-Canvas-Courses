@@ -184,13 +184,19 @@ def parse_manifest(z: zipfile.ZipFile) -> tuple[dict, dict]:
     # but it removes the arbitrary, unrelated instability of pure
     # traversal order.
     raw_items = []
+    seen_refs = set()
     for item in soup.find_all("item"):
         title_tag = item.find("title")
         if not title_tag:
             continue
         title = title_tag.text.strip()
         ref   = item.get("identifierref", "")
-        if title and ref and ref in resources:
+        # The same page or assignment can be placed in more than one module;
+        # it is still one piece of content, so it is listed once (first
+        # placement wins). Otherwise one edit was reported twice, as
+        # "Rules" and "Rules (2)". Its placements are in the module outline.
+        if title and ref and ref in resources and ref not in seen_refs:
+            seen_refs.add(ref)
             raw_items.append((title, resources[ref]))
 
     by_title = {}

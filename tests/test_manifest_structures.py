@@ -120,3 +120,13 @@ def test_uppercase_quiz_qti_file_is_read(make_imscc, compare):
         return make_imscc(name, {"imsmanifest.xml": manifest([("1", "q", "Quiz 1")], res), "quiz/QTI.XML": qti(question)})
     report, *_ = compare(build("old", "What is 2+2?"), build("new", "What is 3+3?"), quizzes=True)
     assert modified_titles(report) == ["[Quiz] Quiz 1"]
+
+
+def test_one_page_placed_in_two_modules_is_one_item(make_imscc, compare):
+    """Canvas lets the same page sit in several modules; one edit must be reported once, not as 'Rules' and 'Rules (2)'."""
+    res = [page_resource("p", "wiki_content/rules.html")]
+    def build(name, body):
+        return make_imscc(name, {"imsmanifest.xml": manifest([("1", "p", "Rules"), ("2", "p", "Rules")], res),
+                                 "wiki_content/rules.html": html(body)})
+    report, *_ = compare(build("old", "Old rules."), build("new", "New rules."))
+    assert modified_titles(report) == ["Rules"]

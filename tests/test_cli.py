@@ -115,3 +115,14 @@ def test_json_names_the_field_of_a_setting_change():
               "media": {"added": [], "removed": [], "renamed": [], "changed": [], "unchanged": []}}
     change = build_json_report(report, "a.imscc", "b.imscc")["content"]["modified"][0]["changes"][0]
     assert change["field"] == "points_possible" and (change["old"], change["new"]) == ("10", "15")
+
+
+def test_a_filename_with_an_ampersand_is_escaped_exactly_once_in_html(make_imscc, run_cli, tmp_path):
+    import shutil
+    a = course(make_imscc, "old", "One.")
+    b = course(make_imscc, "new", "Two.")
+    odd = tmp_path / "foo & bar.imscc"
+    shutil.copy(a, odd)
+    run_cli(str(odd), b, "--html", str(tmp_path / "r.html"))
+    page = (tmp_path / "r.html").read_text(encoding="utf-8")
+    assert "foo &amp; bar.imscc" in page and "&amp;amp;" not in page and "foo & bar.imscc" not in page

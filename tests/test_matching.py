@@ -198,3 +198,9 @@ def test_title_style_matches_are_named_in_a_report_note(make_imscc, compare):
 def test_no_note_when_nothing_was_matched_by_title_style(make_imscc, compare):
     path = pages(make_imscc, "one", [("Week 2 End", "x")])
     assert compare(path, path)[0]["notes"] == []
+
+
+def test_a_kind_without_a_registered_prefix_does_not_crash_the_report():
+    from canvas_compare.diff import build_display_names
+    assert build_display_names({("new_kind", "x"), ("item", "[New Kind] x")}) == {
+        ("item", "[New Kind] x"): "[New Kind] x", ("new_kind", "x"): "[New Kind] x (new_kind)"}

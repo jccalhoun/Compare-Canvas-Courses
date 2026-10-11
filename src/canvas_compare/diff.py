@@ -48,6 +48,16 @@ _KIND_MARKER = {
 }
 
 
+def _prefix(kind: str) -> str:
+    """Display prefix for a kind; a kind missing from _KIND_PREFIX gets a
+    readable one made from its name rather than crashing the report."""
+    return _KIND_PREFIX.get(kind, f"[{kind.replace('_', ' ').title()}] ")
+
+
+def _order(kind: str) -> int:
+    return _KIND_ORDER.index(kind) if kind in _KIND_ORDER else len(_KIND_ORDER)
+
+
 def _marker(kind: str) -> str:
     """
     Short disambiguating label for a kind. Falls back to the kind's own name
@@ -71,7 +81,7 @@ def build_display_names(keys) -> dict:
     groups = {}
     for key in keys:
         kind, name = key
-        groups.setdefault(_KIND_PREFIX[kind] + name, []).append(key)
+        groups.setdefault(_prefix(kind) + name, []).append(key)
 
     names, used = {}, set()
     # Sorted so the result never depends on set iteration order (which varies
@@ -79,7 +89,7 @@ def build_display_names(keys) -> dict:
     # group's marker label equals another group's plain label.
     for base in sorted(groups):
         group = groups[base]
-        group.sort(key=lambda k: (_KIND_ORDER.index(k[0]), k[1]))
+        group.sort(key=lambda k: (_order(k[0]), k[1]))
         for i, key in enumerate(group):
             label = base if i == 0 else f"{base} ({_marker(key[0])})"
             n = 2
