@@ -1,0 +1,38 @@
+[project]
+name = "canvas-compare"
+version = "0.1.0"
+description = "Compare two Canvas .imscc course exports"
+requires-python = ">=3.10"
+dependencies = [
+    "beautifulsoup4",
+    "lxml",
+]
+
+[project.optional-dependencies]
+# .docx/.pptx content comparison is best-effort without these — see
+# parse_office.py. Install with: pip install "canvas-compare[office]"
+office = [
+    "python-docx",
+    "python-pptx",
+]
+
+# Everything the test suite needs: pip install -e ".[test]"
+test = [
+    "pytest",
+    "python-docx",
+    "python-pptx",
+]
+
+[project.scripts]
+canvas-compare = "canvas_compare.cli:main"
+canvas-unused-files = "canvas_compare.unused_cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
