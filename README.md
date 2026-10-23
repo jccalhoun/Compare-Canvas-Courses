@@ -221,6 +221,39 @@ Add the optional office libraries with `pip install ".[office]"`.
 
 ---
 
+## Finding Unused Files
+
+A separate command reads **one** export and lists the files in the course's Files area
+that nothing in the course links to:
+
+```
+python find_unused_files.py course.imscc
+python find_unused_files.py course.imscc --csv files.csv --html files.html
+python find_unused_files.py course.imscc --all      # also show what uses each file
+```
+(Installed as a package, the command is `canvas-unused-files`.)
+
+Every file is put in one of three groups:
+
+| Status | Meaning |
+|---|---|
+| Unreferenced | Nothing in the export links to it |
+| Unpublished only | Linked only from unpublished pages, assignments, discussions, quizzes or module items |
+| Referenced | Linked from at least one published item, a question bank, the syllabus, calendar events, or the course card image |
+
+Links are found in pages, assignment and discussion text, Classic Quiz questions,
+question banks, the syllabus, calendar events, course settings and the module list. A
+link inside an uploaded HTML or CSS file only counts when that file is itself in use.
+The report also lists links to files that aren't in the export (broken file links).
+
+Unreferenced is not the same as unused: students can open any file from the Files page
+if it's visible, and links from other courses, Canvas Studio, external tools or emails
+can't be seen in an export. Move flagged files into a hidden folder for a term before
+deleting them. Files outside `web_resources/` aren't inventoried, and New Quizzes
+content is only searched if your export includes it.
+
+---
+
 ## Reading the Report
 
 The report opens with a one-line count for content and for media:

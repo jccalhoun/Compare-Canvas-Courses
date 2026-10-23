@@ -25,6 +25,7 @@ test = [
 
 [project.scripts]
 canvas-compare = "canvas_compare.cli:main"
+canvas-unused-files = "canvas_compare.unused_cli:main"
 
 [build-system]
 requires = ["setuptools>=61.0"]
