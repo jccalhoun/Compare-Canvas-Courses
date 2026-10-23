@@ -80,12 +80,45 @@ def format_unused_text(result: UnusedFilesResult, course_path: str, show_all: bo
 def format_unused_csv(result: UnusedFilesResult) -> str:
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["Status", "Folder", "File", "Size (bytes)", "Size", "Used by",
+    # Size in bytes comes right after Folder so it sorts correctly in Excel/Sheets
+    # (the readable "4.0 KB" column sorts as text).
+    writer.writerow(["File", "Folder", "Size (bytes)", "Size", "Status", "Used by",
                      "Used only in unpublished content", "Path in export"])
     for f in result.files:
-        writer.writerow([f.status, f.folder, f.filename, f.size, human_size(f.size),
+        writer.writerow([f.filename, f.folder, f.size, human_size(f.size), f.status,
                          "; ".join(f.used_by), "; ".join(f.unpublished_by), f.path])
     return buf.getvalue()
+
+
+# Click a column heading to sort that table; click again to reverse. Size
+# starts largest-first, text columns A to Z. Folder ties are broken by file
+# name, so files stay alphabetical within each folder.
+_SORT_SCRIPT = """
+<script>
+document.querySelectorAll("table.sortable").forEach(function (table) {
+  var heads = table.querySelectorAll("th[data-type]");
+  heads.forEach(function (th, col) {
+    th.querySelector("button").addEventListener("click", function () {
+      var numeric = th.dataset.type === "size";
+      var current = th.getAttribute("aria-sort");
+      var dir = current ? (current === "ascending" ? -1 : 1) : (numeric ? -1 : 1);
+      var body = table.tBodies[0];
+      var rows = Array.prototype.slice.call(body.rows);
+      function key(row, i) { var c = row.cells[i]; return c.dataset.sort !== undefined ? c.dataset.sort : c.textContent.trim(); }
+      rows.sort(function (a, b) {
+        var x = key(a, col), y = key(b, col), r;
+        r = numeric ? Number(x) - Number(y) : x.localeCompare(y, undefined, {numeric: true, sensitivity: "base"});
+        if (r === 0 && col !== 0) r = key(a, 0).localeCompare(key(b, 0), undefined, {numeric: true, sensitivity: "base"});
+        return r * dir;
+      });
+      rows.forEach(function (row) { body.appendChild(row); });
+      heads.forEach(function (h) { h.removeAttribute("aria-sort"); });
+      th.setAttribute("aria-sort", dir === 1 ? "ascending" : "descending");
+    });
+  });
+});
+</script>
+"""
 
 
 def format_unused_html(result: UnusedFilesResult, course_path: str) -> str:
@@ -99,10 +132,18 @@ def format_unused_html(result: UnusedFilesResult, course_path: str) -> str:
                 parts = [esc(u) for u in f.used_by] + [f"{esc(u)} <em>(unpublished)</em>"
                                                        for u in f.unpublished_by]
                 uses = f"<td>{'<br>'.join(parts)}</td>"
-            rows.append(f"<tr><td>{esc(f.folder) or '<em>(top level)</em>'}</td><td>{esc(f.filename)}</td>"
-                        f"<td class='num' data-bytes='{f.size}'>{human_size(f.size)}</td>{uses}</tr>")
-        head = "<th>Folder</th><th>File</th><th class='num'>Size</th>" + ("<th>Used by</th>" if show_uses else "")
-        return f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+            folder = esc(f.folder) or "<em>(top level)</em>"
+            rows.append(f"<tr><td>{esc(f.filename)}</td><td data-sort='{esc(f.folder)}'>{folder}</td>"
+                        f"<td class='num' data-sort='{f.size}'>{human_size(f.size)}</td>{uses}</tr>")
+
+        def th(label, kind, extra=""):
+            # Rows arrive largest-first, so Size starts marked as the current sort.
+            state = " aria-sort='descending'" if kind == "size" else ""
+            return f"<th data-type='{kind}'{extra}{state}><button type='button'>{label}</button></th>"
+
+        head = (th("File", "text") + th("Folder", "text") + th("Size", "size", " class='num'")
+                + (th("Used by", "text") if show_uses else ""))
+        return f"<table class='sortable'><thead><tr>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
 
     unref = result.with_status(STATUS_UNREFERENCED)
     unpub = result.with_status(STATUS_UNPUBLISHED_ONLY)
@@ -121,6 +162,10 @@ def format_unused_html(result: UnusedFilesResult, course_path: str) -> str:
         "ul.summary { line-height: 1.7; } .note { background: #fff3cd; color: #856404; padding: 12px 16px; border-radius: 6px; }",
         ".warn { background: #f8d7da; color: #721c24; padding: 12px 16px; border-radius: 6px; }",
         "summary { cursor: pointer; font-size: 1.17em; font-weight: bold; margin: 1em 0; }",
+        "th button { all: unset; cursor: pointer; font-weight: bold; } th button:focus-visible { outline: 2px solid #0366d6; outline-offset: 2px; }",
+        "th button::after { content: ' \\2195'; color: #aaa; font-weight: normal; }",
+        "th[aria-sort='ascending'] button::after { content: ' \\25B2'; color: #333; }",
+        "th[aria-sort='descending'] button::after { content: ' \\25BC'; color: #333; }",
         "</style></head><body><div class='container'>",
         f"<h1>{esc(title)}</h1>",
         "<ul class='summary'>" + "".join(f"<li>{esc(line)}</li>" for line in _summary_lines(result)) + "</ul>",
@@ -139,5 +184,5 @@ def format_unused_html(result: UnusedFilesResult, course_path: str) -> str:
                    + "".join(f"<tr><td>{esc(l)}</td><td>{esc(t)}</td></tr>" for l, t in result.missing)
                    + "</tbody></table>")
     out.append(f"<details><summary>Referenced ({len(used)})</summary>{table(used, True)}</details>")
-    out.append("</div></body></html>")
+    out.append("</div>" + _SORT_SCRIPT + "</body></html>")
     return "\n".join(out)

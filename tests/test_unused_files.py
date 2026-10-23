@@ -155,9 +155,14 @@ def test_reports_and_cli(make_imscc, tmp_path, capsys):
     out = capsys.readouterr().out
     assert "1 unreferenced (4.0 KB)" in out and "big & old.mp4" in out
     csv_text = (tmp_path / "f.csv").read_text(encoding="utf-8-sig")
-    assert csv_text.splitlines()[1].startswith("unreferenced,,big & old.mp4,4096,4.0 KB")
+    assert csv_text.splitlines()[0].startswith("File,Folder,Size (bytes),Size,Status")
+    assert csv_text.splitlines()[1].startswith("big & old.mp4,,4096,4.0 KB,unreferenced")
     page_html = (tmp_path / "f.html").read_text(encoding="utf-8")
     assert "big &amp; old.mp4" in page_html and "big & old" not in page_html
+    # File, then folder, then size; each heading is a sort button.
+    head = page_html.split("<thead>", 1)[1].split("</thead>", 1)[0]
+    assert head.index(">File<") < head.index(">Folder<") < head.index(">Size<")
+    assert "table.sortable" in page_html and "data-sort='4096'" in page_html
 
 
 def test_cli_rejects_a_file_that_is_not_an_export(make_imscc, capsys):
