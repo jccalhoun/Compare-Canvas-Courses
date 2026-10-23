@@ -10,8 +10,8 @@ Usage:
     python find_unused_files.py course.imscc --csv files.csv --html files.html
     python find_unused_files.py course.imscc --all     # also list what uses each file
 
-Like cli.py, this is a composition root: it may import from any module in
-the package, and nothing imports it.
+Nothing imports this module, and it only needs unused_files.py and
+report_unused.py from the package.
 """
 
 from __future__ import annotations
@@ -20,9 +20,8 @@ import argparse
 import sys
 import zipfile
 
-from .parse_manifest import MissingManifestError
 from .report_unused import format_unused_csv, format_unused_html, format_unused_text
-from .unused_files import find_unused_files
+from .unused_files import MissingManifestError, find_unused_files
 
 
 def main(argv=None):

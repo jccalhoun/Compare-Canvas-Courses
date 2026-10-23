@@ -27,8 +27,10 @@ How a link to a file looks in an export:
         own images "in use".
 
 This is a separate tool from the course comparison: it reads one export,
-and none of the comparison modules depend on it (or it on them, apart from
-MissingManifestError, so callers can handle a non-export the same way).
+and it imports nothing from the comparison modules (nor they from it), so
+unused_files.py, report_unused.py and unused_cli.py can be copied into any
+canvas_compare folder and run on their own. MissingManifestError is defined
+here for that reason rather than imported from parse_manifest.py.
 """
 
 from __future__ import annotations
@@ -44,7 +46,10 @@ from urllib.parse import unquote
 
 from bs4 import BeautifulSoup
 
-from .parse_manifest import MissingManifestError
+
+class MissingManifestError(Exception):
+    """The archive has no imsmanifest.xml, so it isn't a Canvas course export."""
+
 
 FILES_PREFIX = "web_resources/"
 

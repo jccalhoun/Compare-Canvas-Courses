@@ -8,7 +8,12 @@ import io
 
 from .unused_files import (STATUS_REFERENCED, STATUS_UNPUBLISHED_ONLY, STATUS_UNREFERENCED,
                            UnusedFilesResult)
-from .utils import short_label
+
+
+def short_label(path: str) -> str:
+    """Base file name, for either / or \\ separators. (Same as utils.short_label, kept
+    local so this tool doesn't need the rest of the package.)"""
+    return path.replace("\\", "/").rsplit("/", 1)[-1]
 
 CAVEAT = ("Unreferenced is not the same as unused: if the Files page is visible to students they "
           "can still open these there, and links from other courses, Canvas Studio, external "
